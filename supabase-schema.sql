@@ -231,11 +231,17 @@ create policy "Access holders read entity documents"
 -- a read (portal_access) row on related_entity_id — not upload rights,
 -- just visibility — closes both without stopping anyone from linking a
 -- receipt to any property they can actually see.
+-- uploaded_by must either be left blank or match whoever is actually
+-- signed in -- without this, anyone with upload rights to any one section
+-- could set uploaded_by to someone else's account ID on their own upload,
+-- forging who submitted it. auth.js always sends session.user.id (or
+-- omits the field), so this never affects a normal upload through the site.
 create policy "Upload-permitted users insert entity documents"
   on public.entity_documents
   for insert
   with check (
-    exists (
+    (entity_documents.uploaded_by is null or entity_documents.uploaded_by = auth.uid())
+    and exists (
       select 1 from public.portal_access pa
       where pa.user_id = auth.uid() and pa.entity_id = entity_documents.entity_id and pa.can_upload
     )
