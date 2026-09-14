@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>
+// Clickjacking defence-in-depth: GitHub Pages can't send custom HTTP
+// headers (no X-Frame-Options / CSP frame-ancestors is possible), so this
+// page busts out of any frame it's loaded into via JavaScript instead. Not
+// bulletproof against a determined attacker (a sandboxed iframe without
+// allow-top-navigation can suppress the redirect) but stops the common
+// case, and the page stays hidden while framed either way. See the
+// security review for the recommended real fix (a proxy such as
+// Cloudflare in front of the domain, which CAN set these headers).
+(function () {
+  if (window.top !== window.self) {
+    try { window.top.location.href = window.self.location.href; } catch (e) {}
+    document.documentElement.style.display = 'none';
+  }
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log in | Houseago Asset Management</title>
+<meta name="description" content="Private document portal for Houseago Properties Ltd, sole trader and property accounts.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#152238">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Asset Management">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300..700;1,300..700&family=Rethink+Sans:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="brand">
+      <span class="brand-word"><span class="brand-word-1">Houseago</span><span class="brand-word-2">Asset Management</span></span>
+    </a>
+  </div>
+</header>
+
+<div class="portal-shell">
+  <div class="portal-card">
+    <div class="brand">
+      <span class="brand-word"><span class="brand-word-1">Houseago</span><span class="brand-word-2">Asset Management</span></span>
+    </div>
+    <h1>Houseago Asset Management</h1>
+    <p class="sub">A private place to upload and download documents for the Ltd company, sole trader accounts, and each property.</p>
+
+    <form id="portal-login-form">
+      <div id="portal-error" class="portal-error" hidden></div>
+      <div>
+        <label for="portal-email">Email address</label>
+        <input type="email" id="portal-email" name="email" placeholder="you@gmail.com" required>
+      </div>
+      <div>
+        <label for="portal-password">Password</label>
+        <input type="password" id="portal-password" name="password" placeholder="Your password" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Log in</button>
+    </form>
+
+    <form id="portal-mfa-form" hidden>
+      <div id="portal-mfa-error" class="portal-error" hidden></div>
+      <p style="margin:0 0 4px;">This account has two-factor authentication turned on. Enter the 6-digit code from your authenticator app to finish logging in.</p>
+      <div>
+        <label for="portal-mfa-code">Authentication code</label>
+        <input type="text" id="portal-mfa-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="123456" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Verify and continue</button>
+    </form>
+
+    <p class="portal-foot" id="portal-login-foot">Don't have an account? Contact Oscar to get set up.</p>
+    <p class="portal-foot" id="portal-mfa-foot" hidden><a href="#" id="portal-mfa-cancel">Not you, or don't have your device? Log out</a></p>
+
+    <div class="portal-note" id="portal-setup-note" hidden>
+      This portal is not connected to a database yet. Add your Supabase project details to <code>assets/supabase-config.js</code>, then follow <code>SETUP.md</code> to create accounts and add documents.
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>&copy; Houseago Asset Management. Private &mdash; not indexed or linked publicly.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/supabase-config.js"></script>
+<script src="assets/pwa.js"></script>
+<script src="assets/auth.js"></script>
+</body>
+</html>

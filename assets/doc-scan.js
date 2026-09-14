@@ -1,0 +1,354 @@
+// Shared document-scanning engine, used by every file-upload point on the
+// site: the Ltd company, sole trader and Iris Houseago Finances uploads on
+// the dashboard (assets/auth.js); a property's Documents, Compliance &
+// Tenancy and Insurance uploads plus its "scan a bank statement for rent"
+// tool (assets/property.js); a person's own submission points (General
+// Documents, Bank Statements, Investment & Dividend Returns, Employment/
+// Payslips) plus their nested properties' Documents and income-scan
+// (assets/person.js); and Receipts & Invoices (assets/receipts.js).
+//
+// None of this is a real document reader. It is OCR (via Tesseract, for
+// photographed/scanned images) or a PDF's own text layer (via pdf.js), fed
+// through plain keyword and pattern matching to guess a date, an amount, or
+// (for a bank statement) lines that look like rent. Every guess is shown
+// for a person to check, edit, or discard — nothing is saved automatically,
+// and nothing about the file itself is stored anywhere, only whatever
+// fields a person chooses to keep.
+//
+// Pages that use this must load pdf.js and Tesseract.js before this file —
+// see the <script> order in receipts.html, property.html, person.html and
+// dashboard.html.
+
+(function () {
+  function pad2(n) { n = String(n); return n.length < 2 ? '0' + n : n; }
+
+  function normaliseYear(y) {
+    y = parseInt(y, 10);
+    if (y < 100) y += (y < 50 ? 2000 : 1900);
+    return y;
+  }
+
+  function isValidYmd(y, m, d) {
+    if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return false;
+    if (y < 2000 || y > (new Date().getFullYear() + 1)) return false;
+    var dt = new Date(y, m - 1, d);
+    return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+  }
+
+  function toIso(y, m, d) { return y + '-' + pad2(m) + '-' + pad2(d); }
+
+  var MONTH_NAMES = {
+    jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4,
+    may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8,
+    sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12
+  };
+
+  // Finds the best candidate in `text` among everything `patterns` matched,
+  // preferring one that sits shortly after a label from `keywordRegex` (and,
+  // among labels, a longer/more specific one over a generic one) — falling
+  // back to `fallbackCompare` (default: reading order) when no label helps.
+  function pickBestCandidate(candidates, text, keywordRegex, opts) {
+    opts = opts || {};
+    if (candidates.length === 0) return null;
+
+    var keywordSpans = [];
+    var km;
+    keywordRegex.lastIndex = 0;
+    while ((km = keywordRegex.exec(text))) {
+      if (opts.keywordFilter && !opts.keywordFilter(text, km)) continue;
+      keywordSpans.push({ end: km.index + km[0].length, len: km[0].length });
+    }
+
+    if (keywordSpans.length > 0) {
+      var best = null, bestScore = Infinity;
+      candidates.forEach(function (c) {
+        keywordSpans.forEach(function (span) {
+          var dist = c.index - span.end;
+          if (dist < 0 || dist >= 40) return;
+          var score = dist - span.len;
+          if (score < bestScore) { bestScore = score; best = c; }
+        });
+      });
+      if (best) return best;
+    }
+
+    var sorted = candidates.slice();
+    sorted.sort(opts.fallbackCompare || function (a, b) { return a.index - b.index; });
+    return sorted[0];
+  }
+
+  var DATE_PATTERNS = [
+    // 2026-08-14 or 2026/08/14
+    { re: /\b(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\b/g, extract: function (m) {
+        var y = +m[1], mo = +m[2], d = +m[3];
+        return isValidYmd(y, mo, d) ? toIso(y, mo, d) : null;
+      } },
+    // 14 August 2026 / 14th Aug 2026
+    { re: /\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\s+(\d{2,4})\b/g, extract: function (m) {
+        var mon = MONTH_NAMES[m[2].toLowerCase()];
+        if (!mon) return null;
+        var y = normaliseYear(m[3]);
+        return isValidYmd(y, mon, +m[1]) ? toIso(y, mon, +m[1]) : null;
+      } },
+    // August 14, 2026
+    { re: /\b([A-Za-z]{3,9})\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{2,4})\b/g, extract: function (m) {
+        var mon = MONTH_NAMES[m[1].toLowerCase()];
+        if (!mon) return null;
+        var y = normaliseYear(m[3]);
+        return isValidYmd(y, mon, +m[2]) ? toIso(y, mon, +m[2]) : null;
+      } },
+    // 14/08/2026, 14-08-2026, 14.08.2026 (day first, UK convention)
+    { re: /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/g, extract: function (m) {
+        var d = +m[1], mo = +m[2], y = normaliseYear(m[3]);
+        return isValidYmd(y, mo, d) ? toIso(y, mo, d) : null;
+      } }
+  ];
+
+  var DATE_KEYWORDS = /(invoice date|date of invoice|tax point|date issued|receipt date|transaction date|date paid|valid until|expiry date|expires|renewal date|date)/ig;
+
+  function parseDateFromText(text) {
+    if (!text) return null;
+    var candidates = [];
+    DATE_PATTERNS.forEach(function (p) {
+      var re = new RegExp(p.re.source, p.re.flags);
+      var m;
+      while ((m = re.exec(text))) {
+        var iso = p.extract(m);
+        if (iso) candidates.push({ index: m.index, iso: iso });
+        if (re.lastIndex === m.index) re.lastIndex++;
+      }
+    });
+    var best = pickBestCandidate(candidates, text, DATE_KEYWORDS);
+    return best ? best.iso : null;
+  }
+
+  var AMOUNT_PATTERN = /[£$]?\s?(\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
+  var AMOUNT_KEYWORDS = /(grand total|total due|total to pay|amount due|balance due|amount paid|total amount|sub ?total|total)/ig;
+
+  function amountKeywordFilter(text, m) {
+    var word = m[0].toLowerCase().replace(/\s+/g, '');
+    if (word === 'subtotal') return false; // never treat "subtotal" as the total
+    if (word === 'total') {
+      // exclude a bare "total" that's really part of "sub total" / "subtotal"
+      var before = text.slice(Math.max(0, m.index - 5), m.index).toLowerCase();
+      if (/sub[\s-]*$/.test(before)) return false;
+    }
+    return true;
+  }
+
+  function parseAmountFromText(text) {
+    if (!text) return null;
+    var candidates = [];
+    var re = new RegExp(AMOUNT_PATTERN.source, AMOUNT_PATTERN.flags);
+    var m;
+    while ((m = re.exec(text))) {
+      var value = parseFloat(m[1].replace(/,/g, ''));
+      if (!isNaN(value) && value > 0 && value < 100000) candidates.push({ index: m.index, value: value });
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+    var best = pickBestCandidate(candidates, text, AMOUNT_KEYWORDS, {
+      keywordFilter: amountKeywordFilter,
+      // No label found near any figure? On a simple document the total is
+      // usually the largest amount printed, so fall back to that rather
+      // than just the first number (often a smaller line item).
+      fallbackCompare: function (a, b) { return b.value - a.value; }
+    });
+    return best ? best.value : null;
+  }
+
+  function ocrText(imageSource) {
+    if (typeof Tesseract === 'undefined') return Promise.resolve('');
+    return Tesseract.recognize(imageSource, 'eng')
+      .then(function (result) { return (result && result.data && result.data.text) || ''; })
+      .catch(function () { return ''; });
+  }
+
+  // Multi-page text layer extraction (falls back to page-1 canvas OCR only
+  // when there's no text layer at all — a scanned image-only PDF beyond
+  // page 1 isn't OCR'd, to keep this fast; the "nothing usable found"
+  // outcome just means falling back to filling fields in by hand).
+  function extractTextFromPdf(file) {
+    if (typeof pdfjsLib === 'undefined') return Promise.resolve('');
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js';
+    } catch (e) { /* ignore */ }
+
+    return file.arrayBuffer().then(function (buf) {
+      return pdfjsLib.getDocument({ data: buf }).promise;
+    }).then(function (pdf) {
+      var pageTexts = [];
+      var chain = Promise.resolve();
+      for (var i = 1; i <= pdf.numPages; i++) {
+        (function (pageNum) {
+          chain = chain.then(function () {
+            return pdf.getPage(pageNum).then(function (page) {
+              return page.getTextContent().then(function (content) {
+                pageTexts.push((content.items || []).map(function (it) { return it.str; }).join(' '));
+              });
+            });
+          });
+        })(i);
+      }
+      return chain.then(function () {
+        var joined = pageTexts.join('\n');
+        if (joined.trim().length > 20) return joined;
+
+        // Likely a scanned/image-only PDF with no text layer — render just
+        // the first page to a canvas and OCR that as a first pass.
+        return pdf.getPage(1).then(function (page) {
+          var viewport = page.getViewport({ scale: 2 });
+          var canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          var ctx = canvas.getContext('2d');
+          return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+            return new Promise(function (resolve) {
+              canvas.toBlob(function (blob) {
+                if (!blob) { resolve(''); return; }
+                ocrText(blob).then(resolve);
+              });
+            });
+          });
+        });
+      });
+    }).catch(function () { return ''; });
+  }
+
+  function isPdfFile(file) {
+    return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  }
+
+  function isImageFile(file) {
+    return /^image\//.test(file.type || '') || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || '');
+  }
+
+  function extractTextFromFile(file) {
+    if (!file) return Promise.resolve('');
+    if (isPdfFile(file)) return extractTextFromPdf(file);
+    if (isImageFile(file)) return ocrText(file);
+    return Promise.resolve('');
+  }
+
+  // Reads whichever fields it can off a file in one pass of text: a date
+  // and an amount, mined from the same extracted text.
+  function scanFileForFields(file) {
+    return extractTextFromFile(file).then(function (text) {
+      return { date: parseDateFromText(text), amount: parseAmountFromText(text), text: text };
+    }).catch(function () { return { date: null, amount: null, text: '' }; });
+  }
+
+  // ---- Bank-statement rent scan (property/person Income sections) -------
+  var INCOME_KEYWORDS = ['rent', 'rental'];
+  var LINE_AMOUNT_RE = /£?\s?(\d{1,3}(?:,\d{3})*\.\d{2})\b/;
+  var LINE_DATE_RE = /\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})\b/i;
+
+  function extractLikelyIncomeLines(text) {
+    var lines = (text || '').split(/\r?\n/);
+    var found = [];
+    lines.forEach(function (line) {
+      var lower = line.toLowerCase();
+      var hasKeyword = INCOME_KEYWORDS.some(function (k) { return lower.indexOf(k) !== -1; });
+      if (!hasKeyword) return;
+      var amountMatch = line.match(LINE_AMOUNT_RE);
+      if (!amountMatch) return;
+      var dateMatch = line.match(LINE_DATE_RE);
+      found.push({
+        description: line.trim().slice(0, 140),
+        amount: parseFloat(amountMatch[1].replace(/,/g, '')),
+        date: dateMatch ? dateMatch[1] : ''
+      });
+    });
+    return found;
+  }
+
+  function parseLooseDate(str) {
+    if (!str) return null;
+    var m = str.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    if (m) {
+      var yr = m[3].length === 2 ? '20' + m[3] : m[3];
+      return yr + '-' + pad2(m[2]) + '-' + pad2(m[1]);
+    }
+    var parsed = new Date(str);
+    return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+  }
+
+  // ---- Reusable "Take a photo / Choose a file" capture widget -----------
+  // Drops into any upload form in place of a plain <input type="file">.
+  // Once a file's picked, it's scanned in the background and — only for
+  // whichever fields the caller actually points at, and only if they're
+  // still empty — the date and/or amount found are filled in for the
+  // person to check, never overwriting something they've already typed.
+  function captureFieldHtml(opts) {
+    opts = opts || {};
+    var label = opts.label || 'Document';
+    var accept = opts.accept || 'image/*,application/pdf';
+    return (
+      '<div>' +
+        '<label>' + label + '</label>' +
+        '<div class="capture-row">' +
+          '<button type="button" class="btn btn-outline" data-scan-capture-btn>Take a photo</button>' +
+          '<button type="button" class="btn btn-outline" data-scan-choose-btn>Choose a file</button>' +
+        '</div>' +
+        '<input type="file" data-scan-camera accept="image/*" capture="environment" hidden>' +
+        '<input type="file" data-scan-picker accept="' + accept + '" hidden>' +
+        '<p class="form-status" role="status" data-scan-status>No file chosen yet.</p>' +
+      '</div>'
+    );
+  }
+
+  // wireCaptureField(form, { dateInput, amountInput }) -> { getFile, reset }
+  function wireCaptureField(form, opts) {
+    opts = opts || {};
+    var cameraInput = form.querySelector('[data-scan-camera]');
+    var pickerInput = form.querySelector('[data-scan-picker]');
+    var captureBtn = form.querySelector('[data-scan-capture-btn]');
+    var chooseBtn = form.querySelector('[data-scan-choose-btn]');
+    var status = form.querySelector('[data-scan-status]');
+    var currentFile = null;
+
+    if (captureBtn && cameraInput) captureBtn.addEventListener('click', function () { cameraInput.click(); });
+    if (chooseBtn && pickerInput) chooseBtn.addEventListener('click', function () { pickerInput.click(); });
+
+    function handle(file) {
+      if (!file) return;
+      currentFile = file;
+      if (status) status.textContent = file.name + ' — reading…';
+      scanFileForFields(file).then(function (fields) {
+        var bits = [file.name];
+        if (opts.dateInput && fields.date && !opts.dateInput.value) {
+          opts.dateInput.value = fields.date;
+          bits.push('date auto-filled, check it’s right');
+        }
+        if (opts.amountInput && fields.amount != null && !opts.amountInput.value) {
+          opts.amountInput.value = fields.amount;
+          bits.push('amount auto-filled, check it’s right');
+        }
+        if (status) status.textContent = bits.join(' — ');
+      }).catch(function () {
+        if (status) status.textContent = file.name + ' — could not read it automatically, fill in the fields by hand.';
+      });
+    }
+
+    if (cameraInput) cameraInput.addEventListener('change', function () { handle(cameraInput.files[0]); });
+    if (pickerInput) pickerInput.addEventListener('change', function () { handle(pickerInput.files[0]); });
+
+    return {
+      getFile: function () { return currentFile; },
+      reset: function () {
+        currentFile = null;
+        if (cameraInput) cameraInput.value = '';
+        if (pickerInput) pickerInput.value = '';
+        if (status) status.textContent = 'No file chosen yet.';
+      }
+    };
+  }
+
+  window.HouseagoDocScan = {
+    scanFileForFields: scanFileForFields,
+    extractTextFromFile: extractTextFromFile,
+    extractLikelyIncomeLines: extractLikelyIncomeLines,
+    parseLooseDate: parseLooseDate,
+    captureFieldHtml: captureFieldHtml,
+    wireCaptureField: wireCaptureField
+  };
+})();

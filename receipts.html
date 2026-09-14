@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>
+// Clickjacking defence-in-depth: GitHub Pages can't send custom HTTP
+// headers (no X-Frame-Options / CSP frame-ancestors is possible), so this
+// page busts out of any frame it's loaded into via JavaScript instead. Not
+// bulletproof against a determined attacker (a sandboxed iframe without
+// allow-top-navigation can suppress the redirect) but stops the common
+// case, and the page stays hidden while framed either way. See the
+// security review for the recommended real fix (a proxy such as
+// Cloudflare in front of the domain, which CAN set these headers).
+(function () {
+  if (window.top !== window.self) {
+    try { window.top.location.href = window.self.location.href; } catch (e) {}
+    document.documentElement.style.display = 'none';
+  }
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Receipts &amp; Invoices | Houseago Asset Management</title>
+<meta name="description" content="Private document portal for Houseago Properties Ltd, sole trader and property accounts.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#152238">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Asset Management">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300..700;1,300..700&family=Rethink+Sans:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="brand">
+      <span class="brand-word"><span class="brand-word-1">Houseago</span><span class="brand-word-2">Asset Management</span></span>
+    </a>
+    <div class="header-actions">
+      <a href="security.html" class="btn btn-outline">Security</a>
+      <a href="index.html" class="btn btn-outline" data-portal-logout>Log out</a>
+    </div>
+  </div>
+</header>
+
+<section class="bg-panel" style="padding-top:36px;">
+  <div class="container">
+
+    <p style="margin-bottom:28px;"><a id="receipts-back-link" href="dashboard.html" style="font-weight:700; color:var(--navy);">&larr; Back to dashboard</a></p>
+
+    <div class="section-head left">
+      <p class="eyebrow">Receipts &amp; Invoices</p>
+      <h2 id="receipts-title">All receipts, invoices, and evidence</h2>
+      <p>Everything submitted here, in one place. Each one can optionally be linked to a property or account to keep things organised.</p>
+    </div>
+
+    <div id="receipts-access-note" class="entity-card" hidden>
+      <p>Your account does not have access to Receipts &amp; Invoices. Contact Oscar to get this set up.</p>
+    </div>
+
+    <div id="receipts-upload-card" class="entity-card" hidden>
+      <div class="section-head left"><h2>Submit a receipt or invoice</h2></div>
+      <form id="receipt-upload-form" class="form-card" style="margin-top:0;">
+        <div><label for="receipt-name">Name</label><input type="text" id="receipt-name" name="name" required placeholder="e.g. Boiler repair"></div>
+
+        <div>
+          <label>Receipt</label>
+          <div class="capture-row">
+            <button type="button" class="btn btn-outline" id="receipt-capture-btn">Take a photo</button>
+            <button type="button" class="btn btn-outline" id="receipt-choose-btn">Choose a file</button>
+          </div>
+          <input type="file" id="receipt-file-camera" accept="image/*" capture="environment" hidden>
+          <input type="file" id="receipt-file-picker" accept="image/*,application/pdf" hidden>
+          <p class="form-status" role="status" id="receipt-file-status">No file chosen yet.</p>
+
+          <div id="receipt-preview-card" class="capture-preview" hidden>
+            <img id="receipt-preview-img" alt="Preview of the photographed receipt">
+            <label class="capture-crop-toggle">
+              <input type="checkbox" id="receipt-use-crop" checked>
+              Use auto-cropped version
+            </label>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div>
+            <label for="receipt-date">Date</label>
+            <input type="date" id="receipt-date" name="date" required>
+            <p class="form-status" role="status" id="receipt-date-status">Choose a file above and we'll try to read its date automatically.</p>
+          </div>
+          <div>
+            <label for="receipt-amount">Amount (&pound;)</label>
+            <input type="number" id="receipt-amount" name="amount" step="0.01" min="0" placeholder="0.00">
+            <p class="form-status" role="status" id="receipt-amount-status"></p>
+          </div>
+        </div>
+        <div>
+          <label for="receipt-description">Description</label>
+          <input type="text" id="receipt-description" name="description" placeholder="e.g. Emergency callout, paid by card">
+        </div>
+        <div class="form-grid-2">
+          <div>
+            <label for="receipt-category">Category (optional)</label>
+            <select id="receipt-category" name="expense_category"></select>
+          </div>
+          <div>
+            <label for="receipt-related">Relates to</label>
+            <select id="receipt-related" name="related_entity_id">
+              <option value="">General / Other</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Submit</button>
+        <p class="form-status" role="status" id="receipt-upload-status"></p>
+      </form>
+    </div>
+
+    <div class="entity-card" id="receipts-chart-card" hidden>
+      <div class="section-head left">
+        <h2>Expenses by month</h2>
+        <p>Totals what's been submitted here with an amount, broken down by month within a UK financial year (6 April &ndash; 5 April). A guide, not a substitute for your accounts.</p>
+      </div>
+      <div class="chart-controls-row">
+        <div class="chart-fy-picker">
+          <label for="receipts-chart-fy-select">Financial year</label>
+          <select id="receipts-chart-fy-select"></select>
+        </div>
+        <div class="chart-fy-total" id="receipts-chart-fy-total"></div>
+        <button type="button" class="btn btn-outline" id="receipts-export-btn">Export as Excel</button>
+      </div>
+      <div id="receipts-chart"></div>
+      <div id="receipts-category-breakdown" class="category-breakdown"></div>
+    </div>
+
+    <div class="entity-card" id="receipts-list-card" hidden>
+      <div class="section-head left"><h2>All submissions</h2></div>
+      <div class="year-filter-row" id="receipts-year-filter" hidden>
+        <label for="receipts-year-select">Year</label>
+        <select id="receipts-year-select"></select>
+      </div>
+      <div class="doc-list" id="receipts-list">
+        <div class="doc-row"><div class="doc-row-main"><div>Loading&hellip;</div></div></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>&copy; Houseago Asset Management. Private &mdash; not indexed or linked publicly.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="assets/pdf-convert.js"></script>
+<script src="assets/doc-scan.js"></script>
+<script src="assets/supabase-config.js"></script>
+<script src="assets/pwa.js"></script>
+<script src="assets/receipts.js"></script>
+</body>
+</html>

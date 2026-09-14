@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>
+// Clickjacking defence-in-depth: GitHub Pages can't send custom HTTP
+// headers (no X-Frame-Options / CSP frame-ancestors is possible), so this
+// page busts out of any frame it's loaded into via JavaScript instead. Not
+// bulletproof against a determined attacker (a sandboxed iframe without
+// allow-top-navigation can suppress the redirect) but stops the common
+// case, and the page stays hidden while framed either way. See the
+// security review for the recommended real fix (a proxy such as
+// Cloudflare in front of the domain, which CAN set these headers).
+(function () {
+  if (window.top !== window.self) {
+    try { window.top.location.href = window.self.location.href; } catch (e) {}
+    document.documentElement.style.display = 'none';
+  }
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account &amp; Security | Houseago Asset Management</title>
+<meta name="description" content="Private document portal for Houseago Properties Ltd, sole trader and property accounts.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#152238">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Asset Management">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300..700;1,300..700&family=Rethink+Sans:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="brand">
+      <span class="brand-word"><span class="brand-word-1">Houseago</span><span class="brand-word-2">Asset Management</span></span>
+    </a>
+    <div class="header-actions">
+      <a href="dashboard.html" class="btn btn-outline">Back to dashboard</a>
+      <a href="index.html" class="btn btn-outline" data-portal-logout>Log out</a>
+    </div>
+  </div>
+</header>
+
+<section class="bg-panel" style="padding-top:36px;">
+  <div class="container">
+    <div class="section-head left">
+      <p class="eyebrow">Account</p>
+      <h2>Account &amp; security</h2>
+    </div>
+
+    <div id="security-sections">
+      <div class="entity-card"><p>Loading&hellip;</p></div>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>&copy; Houseago Asset Management. Private &mdash; not indexed or linked publicly.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/supabase-config.js"></script>
+<script src="assets/pwa.js"></script>
+<script src="assets/security.js"></script>
+</body>
+</html>
