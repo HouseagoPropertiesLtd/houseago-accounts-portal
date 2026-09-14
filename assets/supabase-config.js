@@ -6,5 +6,5 @@
 // "anon public" key) is safe to expose in the browser; it only works within
 // the access rules set up in the database, see SETUP.md. Never put the
 // "secret"/"service_role" key here.
-const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL";
-const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+const SUPABASE_URL = "https://icdcoexrrvqpplhxycgz.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_jS8tTdnDABky_osEauSKhw_TZHIH-ue";
