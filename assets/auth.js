@@ -686,12 +686,24 @@
           // just "Documents + Income & Outgoings," but it isn't a property
           // from Oscar's point of view, so it gets its own group here.
           var COMPANY_ENTITY_IDS = ['ltd-company'];
+          // 3 Horning Close is owned by Houseago Properties Ltd (a company
+          // asset, not personal property — see the note above the entities
+          // insert in supabase-schema.sql), so its rent counts as the Ltd's
+          // business income/expenses. It sits in the Company group here,
+          // below the Ltd company's own card, rather than in Properties
+          // alongside the personally-owned properties — for anyone who gets
+          // a full card for it (Oscar, Sally, an accountant/bookkeeper with
+          // full access). A partial-access viewer (Documents/Income only)
+          // still nests it under Oscar's page via PROPERTY_OWNERS above,
+          // since there's no equivalent "company" page to nest it in yet.
+          var COMPANY_OWNED_PROPERTY_IDS = ['3-horning-close'];
           var GROUP_LABELS = { company: 'Company', properties: 'Properties', people: 'People' };
           var GROUP_ORDER = ['company', 'properties', 'people'];
           var grouped = { company: [], properties: [], people: [] };
           topLevel.forEach(function (row) {
             var ent = row.entities;
             var group = COMPANY_ENTITY_IDS.indexOf(ent.id) !== -1 ? 'company'
+              : COMPANY_OWNED_PROPERTY_IDS.indexOf(ent.id) !== -1 ? 'company'
               : personForBaseId(ent.id) ? 'people'
               : isPropertyBase(ent.id) ? 'properties'
               : 'company';
