@@ -81,7 +81,56 @@
           '<div class="section-head left"><h2>Signed in as</h2></div>' +
           '<p>' + escapeHtml(session.user.email) + '</p>' +
         '</div>' +
+        '<div class="entity-card" id="password-card">' +
+          '<div class="section-head left"><h2>Password</h2></div>' +
+          '<form class="form-card" id="password-form">' +
+            '<div><label for="password-current">Current password</label><input type="password" id="password-current" name="currentPassword" autocomplete="current-password" required></div>' +
+            '<div><label for="password-new-1">New password</label><input type="password" id="password-new-1" name="password" autocomplete="new-password" minlength="10" required></div>' +
+            '<div><label for="password-new-2">Confirm new password</label><input type="password" id="password-new-2" name="password2" autocomplete="new-password" minlength="10" required></div>' +
+            '<p style="margin:0 0 4px; font-size:0.85rem; color:var(--ink-soft);">Needs at least 10 characters, with a mix of uppercase, lowercase, a number, and a symbol.</p>' +
+            '<button type="submit" class="btn btn-primary">Change password</button>' +
+            '<p class="form-status" role="status" id="password-status"></p>' +
+          '</form>' +
+        '</div>' +
         '<div class="entity-card" id="mfa-card"><p>Loading&hellip;</p></div>';
+
+      var passwordForm = document.getElementById('password-form');
+      if (passwordForm) {
+        passwordForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var current = document.getElementById('password-current').value;
+          var pw1 = document.getElementById('password-new-1').value;
+          var pw2 = document.getElementById('password-new-2').value;
+          var status = document.getElementById('password-status');
+          var submitBtn = passwordForm.querySelector('button[type="submit"]');
+
+          status.style.color = 'var(--rose-deep)';
+
+          if (pw1 !== pw2) { status.textContent = 'Those two new passwords do not match.'; return; }
+
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Changing…';
+          status.textContent = '';
+
+          // currentPassword requires supabase-js v2.102.0+ (this site
+          // loads the "@2" tag, which always resolves to the latest v2.x)
+          // — matches "Require current password when updating" turned on
+          // in the Supabase dashboard, so a hijacked session or an
+          // unlocked laptop can't change the password without already
+          // knowing it. See the security review.
+          client.auth.updateUser({ password: pw1, currentPassword: current }).then(function (result) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Change password';
+            if (result.error) {
+              status.textContent = result.error.message || 'Could not change your password. Please check your current password and try again.';
+              return;
+            }
+            status.style.color = 'var(--ink-soft)';
+            status.textContent = 'Password changed.';
+            passwordForm.reset();
+          });
+        });
+      }
 
       Promise.all([
         client.auth.mfa.listFactors(),

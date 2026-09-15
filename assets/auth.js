@@ -208,6 +208,13 @@
       var mfaCancelLink = document.getElementById('portal-mfa-cancel');
       var loginFoot = document.getElementById('portal-login-foot');
       var mfaFoot = document.getElementById('portal-mfa-foot');
+      var forgotOpenWrap = document.getElementById('portal-forgot-open-wrap');
+      var forgotOpenLink = document.getElementById('portal-forgot-open');
+      var forgotForm = document.getElementById('portal-forgot-form');
+      var forgotFoot = document.getElementById('portal-forgot-foot');
+      var forgotCancelLink = document.getElementById('portal-forgot-cancel');
+      var forgotError = document.getElementById('portal-forgot-error');
+      var forgotSuccess = document.getElementById('portal-forgot-success');
 
       function showMfaStep() {
         loginForm.hidden = true;
@@ -319,6 +326,65 @@
         mfaCancelLink.addEventListener('click', function (e) {
           e.preventDefault();
           client.auth.signOut().then(function () { window.location.reload(); });
+        });
+      }
+
+      // "Forgot your password?" — swaps the login form for an
+      // email-only form that calls resetPasswordForEmail. Deliberately
+      // shows the same success message whether or not the address has an
+      // account (Supabase's own behaviour here already avoids leaking
+      // that — see the account-enumeration check in the security review),
+      // so this never confirms or denies who has a login.
+      if (forgotOpenLink && forgotForm) {
+        forgotOpenLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          loginForm.hidden = true;
+          if (loginFoot) loginFoot.hidden = true;
+          if (forgotOpenWrap) forgotOpenWrap.hidden = true;
+          forgotForm.hidden = false;
+          if (forgotFoot) forgotFoot.hidden = false;
+          if (forgotError) forgotError.hidden = true;
+          if (forgotSuccess) forgotSuccess.hidden = true;
+          forgotForm.reset();
+          var emailInput = document.getElementById('portal-forgot-email');
+          if (emailInput) emailInput.focus();
+        });
+      }
+
+      if (forgotCancelLink) {
+        forgotCancelLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          forgotForm.hidden = true;
+          if (forgotFoot) forgotFoot.hidden = true;
+          loginForm.hidden = false;
+          if (loginFoot) loginFoot.hidden = false;
+          if (forgotOpenWrap) forgotOpenWrap.hidden = false;
+        });
+      }
+
+      if (forgotForm) {
+        forgotForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var email = document.getElementById('portal-forgot-email').value.trim();
+          var submitBtn = forgotForm.querySelector('button[type="submit"]');
+
+          if (forgotError) forgotError.hidden = true;
+          if (forgotSuccess) forgotSuccess.hidden = true;
+          if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sending…'; }
+
+          var redirectTo = new URL('reset-password.html', window.location.href).href;
+
+          client.auth.resetPasswordForEmail(email, { redirectTo: redirectTo }).then(function (result) {
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Send reset link'; }
+            // Shown on success AND on error (other than a malformed email,
+            // which the input's own type="email" validation already
+            // catches) — same reasoning as above, this never reveals
+            // whether the address has an account.
+            if (forgotSuccess) {
+              forgotSuccess.textContent = 'If ' + email + ' has an account, a password reset link is on its way. The link is valid for a limited time — check your inbox (and spam folder).';
+              forgotSuccess.hidden = false;
+            }
+          });
         });
       }
 
