@@ -274,8 +274,15 @@
         // Same cleanup security.js already does before showing its own
         // "off" state.
         client.auth.mfa.listFactors().then(function (listResult) {
-          var totp = (listResult.data && listResult.data.totp) || [];
-          var unverified = totp.filter(function (f) { return f.status !== 'verified'; });
+          // listFactors()'s own grouped .totp array has proven unreliable
+          // here — it can come back empty even when .all correctly lists
+          // an unverified TOTP factor (confirmed by hand during testing:
+          // same account, same moment, .totp === [] and .all === [that
+          // factor]) — so this reads the type/status off .all directly
+          // rather than trusting the pre-grouped array. Same fix applied
+          // everywhere else in the codebase that was doing this cleanup.
+          var allFactors = (listResult.data && listResult.data.all) || [];
+          var unverified = allFactors.filter(function (f) { return f.factor_type === 'totp' && f.status !== 'verified'; });
           Promise.all(unverified.map(function (f) { return client.auth.mfa.unenroll({ factorId: f.id }); }))
             .then(function () {
               client.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator app' }).then(function (result) {
@@ -336,8 +343,8 @@
           // at logging in (same cleanup security.js does for an abandoned
           // enrollment).
           client.auth.mfa.listFactors().then(function (result) {
-            var totp = (result.data && result.data.totp) || [];
-            var unverified = totp.filter(function (f) { return f.status !== 'verified'; });
+            var allFactors = (result.data && result.data.all) || [];
+            var unverified = allFactors.filter(function (f) { return f.factor_type === 'totp' && f.status !== 'verified'; });
             Promise.all(unverified.map(function (f) { return client.auth.mfa.unenroll({ factorId: f.id }); }))
               .then(function () { client.auth.signOut().then(function () { window.location.reload(); }); });
           });
@@ -366,8 +373,8 @@
             showMfaStep();
             return;
           }
-          var totp = (!factorsResult.error && factorsResult.data && factorsResult.data.totp) || [];
-          var verified = totp.filter(function (f) { return f.status === 'verified'; });
+          var allFactors = (!factorsResult.error && factorsResult.data && factorsResult.data.all) || [];
+          var verified = allFactors.filter(function (f) { return f.factor_type === 'totp' && f.status === 'verified'; });
           if (verified.length === 0) {
             showEnrollStep();
             return;
@@ -410,8 +417,8 @@
           if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Verifying…'; }
 
           client.auth.mfa.listFactors().then(function (factorsResult) {
-            var totp = (factorsResult.data && factorsResult.data.totp) || [];
-            var factor = totp.filter(function (f) { return f.status === 'verified'; })[0];
+            var allFactors = (factorsResult.data && factorsResult.data.all) || [];
+            var factor = allFactors.filter(function (f) { return f.factor_type === 'totp' && f.status === 'verified'; })[0];
             if (factorsResult.error || !factor) {
               if (mfaErrorBox) {
                 mfaErrorBox.textContent = 'Could not find your authenticator app. Please try again, or log out and contact Oscar.';

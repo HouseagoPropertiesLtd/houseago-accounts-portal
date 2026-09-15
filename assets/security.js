@@ -141,7 +141,15 @@
           document.getElementById('mfa-card').innerHTML = '<p>Could not load your two-factor authentication settings right now. Please refresh and try again.</p>';
           return;
         }
-        var totp = (factorsResult.data && factorsResult.data.totp) || [];
+        // listFactors()'s own grouped .totp array has proven unreliable —
+        // it can come back empty even when .all correctly lists an
+        // unverified TOTP factor (confirmed by hand: same account, same
+        // moment, .totp === [] and .all === [that factor]) — so this reads
+        // type/status off .all directly instead of trusting the grouped
+        // array. Same fix applied everywhere else in the codebase doing
+        // this same kind of factor lookup.
+        var allFactors = (factorsResult.data && factorsResult.data.all) || [];
+        var totp = allFactors.filter(function (f) { return f.factor_type === 'totp'; });
         var verified = totp.filter(function (f) { return f.status === 'verified'; });
         var unverified = totp.filter(function (f) { return f.status !== 'verified'; });
         // Whether THIS session has actually completed a code challenge —
