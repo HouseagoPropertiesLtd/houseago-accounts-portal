@@ -48,14 +48,23 @@
     return '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
   }
 
-  // Same fixed four certificates/assessments as SETUP.md documents, kept in
-  // sync by hand with the copy in assets/auth.js (which only needs the
-  // labels, for the dashboard-wide "expiring soon" banner).
+  // Same fixed set of certificates/assessments as SETUP.md documents, kept
+  // in sync by hand with the copy in assets/auth.js (which only needs the
+  // labels, for the dashboard-wide "expiring soon" banner). The first four
+  // have a genuine renewal date and get the full green/amber/red tracking
+  // below; the last three (deposit certificate, prescribed information,
+  // inventory) are one-off paperwork issued at the start of a tenancy with
+  // no fixed renewal — tagging them here just gives them their own place
+  // in the Type dropdown and the status panel below shows them as "On
+  // file" or "Not on file yet" rather than a real expiry countdown.
   var COMPLIANCE_TYPES = [
     { id: 'gas_safety', label: 'Gas Safety Certificate (CP12)', hint: 'renews annually' },
     { id: 'eicr', label: 'Electrical Installation Condition Report (EICR)', hint: 'renews at least every 5 years' },
     { id: 'epc', label: 'Energy Performance Certificate (EPC)', hint: 'valid for 10 years' },
-    { id: 'legionella', label: 'Legionella Risk Assessment', hint: 'review at least every 2 years' }
+    { id: 'legionella', label: 'Legionella Risk Assessment', hint: 'review at least every 2 years' },
+    { id: 'deposit_certificate', label: 'Deposit Protection Certificate', hint: 'issued once per tenancy, no fixed renewal' },
+    { id: 'deposit_prescribed_info', label: 'Deposit — Prescribed Information', hint: 'issued once per tenancy, no fixed renewal' },
+    { id: 'inventory', label: 'Inventory / Schedule of Condition', hint: 'done at the start (and end) of each tenancy, no fixed renewal' }
   ];
   var EXPIRING_SOON_DAYS = 60;
 

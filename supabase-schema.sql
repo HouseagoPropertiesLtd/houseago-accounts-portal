@@ -39,6 +39,7 @@ create policy "Signed in users read entities"
 
 insert into public.entities (id, name, sort_order) values
   ('ltd-company', 'Houseago Properties Ltd', 1),
+  ('ltd-company-income', 'Houseago Properties Ltd - Income', 2),
   ('oscar-sole-trader', 'Oscar - Sole Trader (Personal)', 2),
   ('oscar-bank-statements', 'Oscar - Bank Statements', 21),
   ('oscar-investment-dividends', 'Oscar - Investment & Dividend Returns', 22),
@@ -78,12 +79,23 @@ on conflict (id) do nothing;
 
 -- 3 Horning Close is owned by Houseago Properties Ltd (Oscar is the Ltd's
 -- exclusive shareholder, so it's a company asset, not his personal
--- property — unlike Wild Thyme, which really is Sally's own). It's
--- managed day to day through Oscar's access: he gets it in full, and
--- Sally only its Insurance and Income sections (the same "sight of every
--- property's insurance and income" arrangement Oscar has for Wild Thyme),
--- since she isn't a shareholder in the Ltd. Check the access rows in
--- section 5 below if that split should be different.
+-- property — unlike Wild Thyme, which really is Sally's own). Because of
+-- that, its rent is tracked as the Ltd's own business income rather than
+-- the property's own — there is deliberately no '3-horning-close-income'
+-- or '3-horning-close-insurance' access in ordinary use, and the entity
+-- id itself (bare '3-horning-close', i.e. its Documents section) isn't
+-- granted either. The only thing left at the property level is
+-- '3-horning-close-compliance-tenancy' (property-specific paperwork:
+-- gas safety, EICR, deposit certificate, etc. — see section 10 of
+-- SETUP.md), which renders on the dashboard grouped under Houseago
+-- Properties Ltd rather than in Properties (see COMPANY_OWNED_PROPERTY_IDS
+-- in assets/auth.js). Rent itself is entered against the new
+-- 'ltd-company-income' entity above, on Houseago Properties Ltd's own
+-- page, the same Income & Outgoings mechanism every property uses.
+-- ('3-horning-close-income' and '3-horning-close-insurance' rows still
+-- exist below for now, in case anything was ever filed under them before
+-- this change — nothing currently is — but they're not meant to be
+-- granted to anyone going forward.)
 --
 -- Receipts & Invoices is now three separate entities, one per person
 -- (oscar-receipts-invoices / sally-receipts-invoices /
@@ -411,10 +423,8 @@ create policy "Require completed 2FA once enrolled"
 --   ('OSCAR_USER_ID', '6a-chaucer-street-compliance-tenancy', true),
 --   ('OSCAR_USER_ID', '6a-chaucer-street-insurance', true),
 --   ('OSCAR_USER_ID', '6a-chaucer-street-income', true),
---   ('OSCAR_USER_ID', '3-horning-close', true),
 --   ('OSCAR_USER_ID', '3-horning-close-compliance-tenancy', true),
---   ('OSCAR_USER_ID', '3-horning-close-insurance', true),
---   ('OSCAR_USER_ID', '3-horning-close-income', true),
+--   ('OSCAR_USER_ID', 'ltd-company-income', true),
 --   ('OSCAR_USER_ID', 'iris-houseago-finances', true),
 --   ('OSCAR_USER_ID', 'iris-bank-statements', true),
 --   ('OSCAR_USER_ID', 'iris-investment-dividends', true),
@@ -429,11 +439,13 @@ create policy "Require completed 2FA once enrolled"
 -- 33 North Denes and both Chaucer Street properties (shared/jointly
 -- managed) with their compliance/tenancy, insurance and income sections,
 -- all of Iris's sections, all three people's Receipts & Invoices (kept
--- mutually visible with Oscar), Wild Thyme in full (her own property),
--- and 3 Horning Close's insurance and income sections too (mirroring how
--- Oscar has sight of every property's insurance and income, even though
--- 3 Horning Close itself is a Houseago Properties Ltd asset managed
--- through his shareholding, not hers) — all with upload rights.
+-- mutually visible with Oscar), and Wild Thyme in full (her own property)
+-- — all with upload rights. (3 Horning Close itself is a Houseago
+-- Properties Ltd asset, not personal to either of them — see the note
+-- above the entities insert — so neither Oscar's nor Sally's row here
+-- grants its old insurance/income sections; add
+-- ('SALLY_USER_ID', '3-horning-close-compliance-tenancy', true) below too
+-- if Sally should also see that property's compliance paperwork.
 -- insert into public.portal_access (user_id, entity_id, can_upload) values
 --   ('SALLY_USER_ID', 'sally-sole-trader', true),
 --   ('SALLY_USER_ID', 'sally-bank-statements', true),
@@ -461,53 +473,31 @@ create policy "Require completed 2FA once enrolled"
 --   ('SALLY_USER_ID', 'wild-thyme', true),
 --   ('SALLY_USER_ID', 'wild-thyme-compliance-tenancy', true),
 --   ('SALLY_USER_ID', 'wild-thyme-insurance', true),
---   ('SALLY_USER_ID', 'wild-thyme-income', true),
---   ('SALLY_USER_ID', '3-horning-close-insurance', true),
---   ('SALLY_USER_ID', '3-horning-close-income', true);
+--   ('SALLY_USER_ID', 'wild-thyme-income', true);
 
--- Accountant: the financial sections only — every company/sole trader
--- account and property, all three people's Bank Statements, Investment &
--- Dividend Returns and Employment/Payslips submission points, every
--- property's Income section, and all three people's Receipts & Invoices,
--- EXCEPT the five Insurance sections and the five Compliance & Tenancy
--- sections, read/download only (can_upload left false). Simply leave the
--- *-insurance and *-compliance-tenancy entities out of their rows
--- entirely — with no portal_access row for a given entity, it never
--- appears for them at all, not even to view.
+-- Bookkeeper/accountant, full access (Charlotte, Tatiana, and Dominic at
+-- Triple Bottom Line Accounting were set up this way on 15 Sep 2026):
+-- every entity, view AND upload, so they can both pull records and file
+-- things like prepared accounts back into the portal. The simplest way
+-- to grant this to a new person is the one used for these three — select
+-- every entity except the deprecated 3-horning-close rows, rather than
+-- listing each one by hand:
 --
--- Because the accountant only ever gets the base property row and/or its
--- -income row (never -compliance-tenancy or -insurance), auth.js treats
--- this as "partial" property access: rather than getting each property's
--- own standalone page, its Documents and Income & Outgoings sections are
--- nested inside the relevant owner's person.html page instead (see
--- PROPERTY_OWNERS in auth.js) — so on the dashboard the accountant sees
--- only the Ltd company plus Oscar/Sally/Iris's three person cards, with
--- 3 Horning Close and 33 North Denes under Oscar, 33 North Denes and
--- Wild Thyme under Sally, and both Chaucer Street properties under Iris.
--- insert into public.portal_access (user_id, entity_id, can_upload) values
---   ('ACCOUNTANT_USER_ID', 'ltd-company', false),
---   ('ACCOUNTANT_USER_ID', 'oscar-sole-trader', false),
---   ('ACCOUNTANT_USER_ID', 'oscar-bank-statements', false),
---   ('ACCOUNTANT_USER_ID', 'oscar-investment-dividends', false),
---   ('ACCOUNTANT_USER_ID', 'oscar-employment-payslips', false),
---   ('ACCOUNTANT_USER_ID', 'sally-sole-trader', false),
---   ('ACCOUNTANT_USER_ID', 'sally-bank-statements', false),
---   ('ACCOUNTANT_USER_ID', 'sally-investment-dividends', false),
---   ('ACCOUNTANT_USER_ID', 'sally-employment-payslips', false),
---   ('ACCOUNTANT_USER_ID', '33-north-denes', false),
---   ('ACCOUNTANT_USER_ID', '33-north-denes-income', false),
---   ('ACCOUNTANT_USER_ID', '6-chaucer-street', false),
---   ('ACCOUNTANT_USER_ID', '6-chaucer-street-income', false),
---   ('ACCOUNTANT_USER_ID', '6a-chaucer-street', false),
---   ('ACCOUNTANT_USER_ID', '6a-chaucer-street-income', false),
---   ('ACCOUNTANT_USER_ID', '3-horning-close', false),
---   ('ACCOUNTANT_USER_ID', '3-horning-close-income', false),
---   ('ACCOUNTANT_USER_ID', 'wild-thyme', false),
---   ('ACCOUNTANT_USER_ID', 'wild-thyme-income', false),
---   ('ACCOUNTANT_USER_ID', 'iris-houseago-finances', false),
---   ('ACCOUNTANT_USER_ID', 'iris-bank-statements', false),
---   ('ACCOUNTANT_USER_ID', 'iris-investment-dividends', false),
---   ('ACCOUNTANT_USER_ID', 'iris-employment-payslips', false),
---   ('ACCOUNTANT_USER_ID', 'oscar-receipts-invoices', false),
---   ('ACCOUNTANT_USER_ID', 'sally-receipts-invoices', false),
---   ('ACCOUNTANT_USER_ID', 'iris-receipts-invoices', false);
+-- insert into public.portal_access (user_id, entity_id, can_upload)
+-- select u.id, e.id, true
+-- from auth.users u
+-- cross join public.entities e
+-- where u.email = 'NEW_PERSON_EMAIL'
+--   and e.id not in ('3-horning-close', '3-horning-close-income', '3-horning-close-insurance')
+-- on conflict (user_id, entity_id) do update set can_upload = excluded.can_upload;
+--
+-- For a more restricted accountant (read-only, or excluded from
+-- Insurance/Compliance & Tenancy) build the row list by hand instead,
+-- following Oscar's or Sally's example above, setting can_upload to
+-- false and/or leaving specific *-insurance / *-compliance-tenancy
+-- entities out entirely — with no portal_access row for a given entity,
+-- it never appears for them at all, not even to view. A partial-access
+-- property viewer (base row and/or -income row, but not
+-- -compliance-tenancy or -insurance) gets that property nested inside
+-- the relevant owner's person.html page instead of its own card — see
+-- PROPERTY_OWNERS in auth.js.

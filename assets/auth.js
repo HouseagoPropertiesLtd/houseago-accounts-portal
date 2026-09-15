@@ -107,7 +107,10 @@
     { id: 'gas_safety', label: 'Gas Safety Certificate (CP12)' },
     { id: 'eicr', label: 'Electrical Installation Condition Report (EICR)' },
     { id: 'epc', label: 'Energy Performance Certificate (EPC)' },
-    { id: 'legionella', label: 'Legionella Risk Assessment' }
+    { id: 'legionella', label: 'Legionella Risk Assessment' },
+    { id: 'deposit_certificate', label: 'Deposit Protection Certificate' },
+    { id: 'deposit_prescribed_info', label: 'Deposit — Prescribed Information' },
+    { id: 'inventory', label: 'Inventory / Schedule of Condition' }
   ];
   var EXPIRING_SOON_DAYS = 60; // matches the CP12 early-renewal window, so a due gas cert always shows amber first
 

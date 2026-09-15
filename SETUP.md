@@ -419,11 +419,11 @@ either way.
 
 ## 10. Compliance tracking
 
-Each property still tracks four specific certificates/assessments under
-its Compliance & Tenancy entity (merged into the Documents card on
-screen, as described in section 7), chosen to match what the NRLA's own
-compliance guidance lists as the core legal requirements for a rental
-property:
+Each property tracks seven specific items under its Compliance & Tenancy
+entity (merged into the Documents card on screen, as described in
+section 7). The first four match what the NRLA's own compliance guidance
+lists as the core legal requirements for a rental property, and each has
+a genuine renewal date:
 
 - **Gas Safety Certificate (CP12)** — renews annually
 - **Electrical Installation Condition Report (EICR)** — renews at least
@@ -431,28 +431,43 @@ property:
 - **Energy Performance Certificate (EPC)** — valid for 10 years
 - **Legionella Risk Assessment** — review at least every 2 years
 
+The other three are one-off paperwork issued at the start of a tenancy,
+not things that renew on a schedule, but are still tracked as their own
+tagged type (rather than left as an untagged general document) so they
+can be found and confirmed on file at a glance:
+
+- **Deposit Protection Certificate** — issued once per tenancy
+- **Deposit — Prescribed Information** — issued once per tenancy
+- **Inventory / Schedule of Condition** — done at the start (and end) of
+  each tenancy
+
 A status panel at the top of the Documents card (for anyone with
-Compliance & Tenancy access) shows all four at a glance: green ("Valid
-until …") once a certificate's been uploaded with a date, amber ("Expires
-in N days") once it's within 60 days of that date, red ("Expired …") once
-it's passed, or grey ("Not on file yet") if nothing's been uploaded for
-it at all. Anything else tagged Compliance & Tenancy — a tenancy
-agreement, for instance — just appears
-in the ordinary document list below, unaffected by any of this.
+Compliance & Tenancy access) shows all seven at a glance. For the first
+four: green ("Valid until …") once a certificate's been uploaded with a
+date, amber ("Expires in N days") once it's within 60 days of that date,
+red ("Expired …") once it's passed, or grey ("Not on file yet") if
+nothing's been uploaded for it at all. The other three don't have an
+expiry date to track, so they only ever show grey ("Not on file yet") or
+neutral ("On file, no expiry date given") once something's been tagged
+that way. Anything else tagged Compliance & Tenancy — a general tenancy
+agreement, for instance — just appears in the ordinary document list
+below, unaffected by any of this.
 
-To make an upload count towards one of the four, anyone with Compliance &
-Tenancy access sees an extra dropdown on the property's Documents form,
+To make an upload count towards one of the seven, anyone with Compliance
+& Tenancy access sees an extra dropdown on the property's Documents form,
 "Is this one of the tracked certificates?" — it appears once "Type:
-Compliance & Tenancy" is selected. Pick the matching certificate and give
-it a "Valid until" date, and the status panel picks it up immediately.
-Leave it as "No — general document" (the default) for anything else.
+Compliance & Tenancy" is selected. Pick the matching item and, for one of
+the first four, give it a "Valid until" date too, and the status panel
+picks it up immediately. Leave it as "No — general document" (the
+default) for anything else.
 
-This tracking is deliberately limited to these four. Other things NRLA's
-own guidance lists — smoke/CO alarm checks, Right to Rent records, HMO
-licensing — don't have a fixed renewal date in the same way and would
-turn this into a much bigger compliance system than a small accounts
-portal needs; they're still fine to store as ordinary documents in the
-same section, just without a tracked status.
+This tracking is deliberately limited to these seven. Other things
+NRLA's own guidance lists — smoke/CO alarm checks, Right to Rent
+records, HMO licensing — don't have a fixed renewal date and aren't
+tagged here either; they're still fine to store as ordinary documents in
+the same section, just without a tracked status. The same seven options
+are available on every property — there's nothing to configure per
+property to turn them on.
 
 ## 11. "Documents expiring soon" and Self Assessment reminders
 
