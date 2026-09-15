@@ -265,12 +265,27 @@
         if (enrollWrap) enrollWrap.hidden = false;
         if (enrollFoot) enrollFoot.hidden = false;
         if (enrollCard) enrollCard.innerHTML = '<p>Setting up…</p>';
-        client.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator app' }).then(function (result) {
-          if (result.error || !result.data) {
-            if (enrollCard) enrollCard.innerHTML = '<p>Could not start setup just now. Please refresh the page and try again.</p>';
-            return;
-          }
-          renderEnrollCard(result.data);
+        // Clear out any abandoned, never-confirmed enrollment first —
+        // Supabase only allows one unverified TOTP factor (and one of a
+        // given friendly name) on an account at a time, so a setup
+        // attempt that was never finished (browser closed mid-scan, a
+        // refresh, whatever) would otherwise silently block every future
+        // attempt with no way back in short of a manual fix in Supabase.
+        // Same cleanup security.js already does before showing its own
+        // "off" state.
+        client.auth.mfa.listFactors().then(function (listResult) {
+          var totp = (listResult.data && listResult.data.totp) || [];
+          var unverified = totp.filter(function (f) { return f.status !== 'verified'; });
+          Promise.all(unverified.map(function (f) { return client.auth.mfa.unenroll({ factorId: f.id }); }))
+            .then(function () {
+              client.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator app' }).then(function (result) {
+                if (result.error || !result.data) {
+                  if (enrollCard) enrollCard.innerHTML = '<p>Could not start setup just now. Please refresh the page and try again.</p>';
+                  return;
+                }
+                renderEnrollCard(result.data);
+              });
+            });
         });
       }
 
