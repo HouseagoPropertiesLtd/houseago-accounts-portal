@@ -1,12 +1,15 @@
-// Powers security.html: turning two-factor authentication (TOTP, via an
-// authenticator app) on or off for the signed-in account. Uses Supabase
-// Auth's own built-in MFA support (client.auth.mfa.*) — no server-side
-// code of ours involved, same anon-key-only approach as the rest of the
-// site. See the "Two-factor authentication" section of supabase-schema.sql
-// for the database-side enforcement this pairs with (once an account has a
-// verified factor, the database itself refuses to hand back documents
-// until that account's session has actually completed a 2FA challenge —
-// this page only handles turning it on/off, not enforcing it).
+// Powers security.html: setting up two-factor authentication (TOTP, via an
+// authenticator app) for the signed-in account, changing the account
+// password, and sending a password-reset email. 2FA is compulsory for
+// every account (see supabase-schema.sql and the security review) and is
+// deliberately NOT self-service to turn off from here once it's on — see
+// the note in renderEnabled below. Uses Supabase Auth's own built-in MFA
+// support (client.auth.mfa.*) — no server-side code of ours involved, same
+// anon-key-only approach as the rest of the site. See the "Two-factor
+// authentication" section of supabase-schema.sql for the database-side
+// enforcement this pairs with (once an account has a verified factor, the
+// database itself refuses to hand back documents until that account's
+// session has actually completed a 2FA challenge).
 //
 // Falls back to a sample preview until assets/supabase-config.js has real
 // values in it, same as the rest of the site (see SETUP.md).
@@ -91,8 +94,36 @@
             '<button type="submit" class="btn btn-primary">Change password</button>' +
             '<p class="form-status" role="status" id="password-status"></p>' +
           '</form>' +
+          '<p style="margin-top:14px; font-size:0.9rem;"><a href="#" id="password-reset-email-link">Forgot your current password? Email me a reset link instead</a></p>' +
+          '<p class="form-status" role="status" id="password-reset-email-status"></p>' +
         '</div>' +
         '<div class="entity-card" id="mfa-card"><p>Loading&hellip;</p></div>';
+
+      // Sends a normal Supabase password-reset email to this account's own
+      // registered address — same mechanism as the "Forgot your password?"
+      // link on the login page (index.html/auth.js), just reachable from
+      // here too since the person is already signed in and their email is
+      // already known, so there's no need to type it in again. Lands on
+      // the same reset-password.html page.
+      var resetEmailLink = document.getElementById('password-reset-email-link');
+      if (resetEmailLink) {
+        resetEmailLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          var status = document.getElementById('password-reset-email-status');
+          status.style.color = 'var(--ink-soft)';
+          status.textContent = 'Sending…';
+          var redirectTo = new URL('reset-password.html', window.location.href).href;
+          client.auth.resetPasswordForEmail(session.user.email, { redirectTo: redirectTo }).then(function (result) {
+            if (result.error) {
+              status.style.color = 'var(--rose-deep)';
+              status.textContent = 'Could not send that just now. Please try again.';
+              return;
+            }
+            status.style.color = 'var(--ink-soft)';
+            status.textContent = 'A password reset link is on its way to ' + session.user.email + '. Check your inbox (and spam folder).';
+          });
+        });
+      }
 
       var passwordForm = document.getElementById('password-form');
       if (passwordForm) {
@@ -173,6 +204,15 @@
     }
 
     function renderEnabled(session, factor, thisSessionIsAal2) {
+      // Two-factor authentication is compulsory for every account (see the
+      // "Two-factor authentication made compulsory" section of the
+      // security review) — there is deliberately no way to turn it off
+      // here. The database itself refuses to hand back any data for a
+      // session that hasn't completed a 2FA challenge, so a UI toggle to
+      // disable it would be misleading even if it were offered. Lost
+      // access to the authenticator app is handled by Oscar directly in
+      // the Supabase dashboard (removing the factor there so the account
+      // can enrol a new one), not self-service.
       var card = document.getElementById('mfa-card');
       card.innerHTML =
         '<div class="section-head left"><h2>Two-factor authentication</h2></div>' +
@@ -180,32 +220,9 @@
           escapeHtml(factor.friendly_name || 'Authenticator app') +
           (factor.created_at ? ', added ' + formatDate(factor.created_at) : '') +
         '</span></div>' +
-        '<p>A code from your authenticator app is required every time you log in, in addition to your password.</p>' +
-        (thisSessionIsAal2
-          ? '<button type="button" class="btn btn-outline" id="mfa-turn-off">Turn off two-factor authentication</button>'
-          // This session logged in before 2FA was turned on (or otherwise
-          // hasn't completed a code challenge) — requiring a fresh code
-          // here, not just the password already on file, is what stops
-          // someone who has only phished a password from quietly switching
-          // this off for you.
-          : '<p class="form-status" role="status" style="color:var(--ink-soft);">To turn this off, log out and log back in with a code from your authenticator app first — then come back here.</p>') +
+        '<p>A code from your authenticator app is required every time you log in, in addition to your password. This is required for every account and can&rsquo;t be turned off here.</p>' +
+        '<p style="font-size:0.9rem; color:var(--ink-soft);">Lost your authenticator app? Contact Oscar to have it reset so you can set up a new one.</p>' +
         '<p class="form-status" role="status" id="mfa-status"></p>';
-
-      var turnOffBtn = document.getElementById('mfa-turn-off');
-      if (turnOffBtn) {
-        turnOffBtn.addEventListener('click', function () {
-          if (!window.confirm('Turn off two-factor authentication? Logging in will only need your password after this.')) return;
-          var status = document.getElementById('mfa-status');
-          status.textContent = 'Turning off…';
-          client.auth.mfa.unenroll({ factorId: factor.id }).then(function (result) {
-            if (result.error) {
-              status.textContent = 'Could not turn it off just now — you may need to log out, log back in with a code, and try again.';
-              return;
-            }
-            loadStatus(session);
-          });
-        });
-      }
     }
 
     function renderDisabled(session) {
