@@ -83,6 +83,13 @@
     return div.innerHTML;
   }
 
+  // Only needed for the QR-code data: URI in the forced-enrollment step
+  // below — see the matching helper in security.js for why quotes need
+  // escaping there too.
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function formatDate(iso) {
     try {
       return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -191,16 +198,21 @@
 
     // ---- Login page ----
     // Two-factor authentication (TOTP, via Supabase's built-in MFA) is
-    // optional per account, set up on security.html. A password alone gets
-    // a session at "aal1" (assurance level 1); if the account has a
-    // verified authenticator app enrolled, Supabase reports a "next level"
-    // of aal2, and this second step — a 6-digit code — is required before
-    // treating the person as actually logged in. Nothing here is enforced
-    // client-side only: the database itself refuses to hand back rows
-    // (portal_access, entity_documents, Storage) while stuck at aal1 for an
-    // account that has 2FA on — see the "Two-factor authentication" section
-    // of supabase-schema.sql — so this step can't be skipped by going
-    // straight to dashboard.html either.
+    // compulsory for every account. A password alone gets a session at
+    // "aal1" (assurance level 1); an account with a verified authenticator
+    // app enrolled gets a "next level" of aal2, and that second step — a
+    // 6-digit code — is required immediately, right here, before treating
+    // the person as actually logged in. An account with NO factor enrolled
+    // yet is walked straight into setting one up, also right here, rather
+    // than being allowed to reach the dashboard first — see showEnrollStep
+    // below. Nothing here is enforced client-side only: the database
+    // itself now refuses to hand back rows (portal_access,
+    // entity_documents, Storage) for any account/session that hasn't
+    // actually completed a 2FA challenge — see the "Two-factor
+    // authentication" section of supabase-schema.sql — so neither step can
+    // be skipped by going straight to dashboard.html either (dashboard.js,
+    // property.js and person.js all check this the same way on load and
+    // bounce back here if it isn't satisfied yet).
     if (loginForm) {
       var errorBox = document.getElementById('portal-error');
       var mfaForm = document.getElementById('portal-mfa-form');
@@ -215,10 +227,25 @@
       var forgotCancelLink = document.getElementById('portal-forgot-cancel');
       var forgotError = document.getElementById('portal-forgot-error');
       var forgotSuccess = document.getElementById('portal-forgot-success');
+      var enrollWrap = document.getElementById('portal-enroll-wrap');
+      var enrollCard = document.getElementById('portal-enroll-card');
+      var enrollFoot = document.getElementById('portal-enroll-foot');
+      var enrollCancelLink = document.getElementById('portal-enroll-cancel');
 
-      function showMfaStep() {
+      function hideAllSteps() {
         loginForm.hidden = true;
         if (loginFoot) loginFoot.hidden = true;
+        if (forgotOpenWrap) forgotOpenWrap.hidden = true;
+        if (forgotForm) forgotForm.hidden = true;
+        if (forgotFoot) forgotFoot.hidden = true;
+        if (mfaForm) mfaForm.hidden = true;
+        if (mfaFoot) mfaFoot.hidden = true;
+        if (enrollWrap) enrollWrap.hidden = true;
+        if (enrollFoot) enrollFoot.hidden = true;
+      }
+
+      function showMfaStep() {
+        hideAllSteps();
         if (mfaForm) mfaForm.hidden = false;
         if (mfaFoot) mfaFoot.hidden = false;
         if (mfaForm) {
@@ -227,11 +254,90 @@
         }
       }
 
+      // A never-enrolled account doesn't get to see the dashboard at all —
+      // 2FA is compulsory, so this starts setup immediately, inline, right
+      // after the password step succeeds (or on any later visit while
+      // still signed in and still unenrolled). Mirrors security.js's own
+      // enrollment UI (renderEnrolling), just reached from the login page
+      // instead of the account-management page.
+      function showEnrollStep() {
+        hideAllSteps();
+        if (enrollWrap) enrollWrap.hidden = false;
+        if (enrollFoot) enrollFoot.hidden = false;
+        if (enrollCard) enrollCard.innerHTML = '<p>Setting up…</p>';
+        client.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator app' }).then(function (result) {
+          if (result.error || !result.data) {
+            if (enrollCard) enrollCard.innerHTML = '<p>Could not start setup just now. Please refresh the page and try again.</p>';
+            return;
+          }
+          renderEnrollCard(result.data);
+        });
+      }
+
+      function renderEnrollCard(factor) {
+        if (!enrollCard) return;
+        var qr = (factor.totp && factor.totp.qr_code) || '';
+        var secret = (factor.totp && factor.totp.secret) || '';
+        enrollCard.innerHTML =
+          '<p>Scan this QR code with an authenticator app &mdash; Microsoft Authenticator, Google Authenticator, Authy, 1Password, and similar all work, since this uses the same standard (TOTP) every one of them supports. In Microsoft Authenticator: tap the &ldquo;+&rdquo; to add an account, then &ldquo;Other account&rdquo; (not &ldquo;Work or school account&rdquo;), then scan. Or enter the setup key by hand below if you can’t scan it.</p>' +
+          '<div class="mfa-qr-wrap">' +
+            (qr ? '<img src="' + escapeAttr(qr) + '" alt="QR code for two-factor authentication setup">' : '') +
+            '<div class="mfa-secret"><strong>Setup key</strong><br><code>' + escapeHtml(secret) + '</code></div>' +
+          '</div>' +
+          '<div>' +
+            '<label for="portal-enroll-code">Enter the 6-digit code your app shows now, to confirm it’s working</label>' +
+            '<input type="text" id="portal-enroll-code" class="mfa-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="123456">' +
+          '</div>' +
+          '<div style="display:flex; gap:12px; margin-top:14px;">' +
+            '<button type="button" class="btn btn-primary" id="portal-enroll-confirm">Verify and continue</button>' +
+          '</div>' +
+          '<p class="form-status" role="status" id="portal-enroll-status"></p>';
+
+        document.getElementById('portal-enroll-confirm').addEventListener('click', function () {
+          var code = document.getElementById('portal-enroll-code').value.trim();
+          var status = document.getElementById('portal-enroll-status');
+          if (!code) { status.textContent = 'Enter the 6-digit code first.'; return; }
+          status.textContent = 'Checking…';
+
+          client.auth.mfa.challenge({ factorId: factor.id }).then(function (challengeResult) {
+            if (challengeResult.error) { status.textContent = 'Something went wrong. Please try again.'; return; }
+            client.auth.mfa.verify({ factorId: factor.id, challengeId: challengeResult.data.id, code: code }).then(function (verifyResult) {
+              if (verifyResult.error) {
+                status.textContent = 'That code wasn’t recognised. Check the time on your phone is correct, and try the next code your app shows.';
+                return;
+              }
+              window.location.href = 'dashboard.html';
+            });
+          });
+        });
+      }
+
+      if (enrollCancelLink) {
+        enrollCancelLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          // Clears the half-finished, never-verified factor first —
+          // Supabase only allows one unverified TOTP factor on an account
+          // at a time, so leaving it behind would block the next attempt
+          // at logging in (same cleanup security.js does for an abandoned
+          // enrollment).
+          client.auth.mfa.listFactors().then(function (result) {
+            var totp = (result.data && result.data.totp) || [];
+            var unverified = totp.filter(function (f) { return f.status !== 'verified'; });
+            Promise.all(unverified.map(function (f) { return client.auth.mfa.unenroll({ factorId: f.id }); }))
+              .then(function () { client.auth.signOut().then(function () { window.location.reload(); }); });
+          });
+        });
+      }
+
       // After a valid session exists (fresh sign-in, or one already on
       // file), decide whether it's actually ready to use yet.
       function proceedPastAuth() {
-        client.auth.mfa.getAuthenticatorAssuranceLevel().then(function (result) {
-          if (result.error) {
+        Promise.all([
+          client.auth.mfa.getAuthenticatorAssuranceLevel(),
+          client.auth.mfa.listFactors()
+        ]).then(function (results) {
+          var levelsResult = results[0], factorsResult = results[1];
+          if (levelsResult.error) {
             // Fail closed, not open — if we can't tell whether a second
             // factor is required, don't assume it isn't.
             if (errorBox) {
@@ -240,12 +346,18 @@
             }
             return;
           }
-          var levels = result.data;
+          var levels = levelsResult.data;
           if (levels.nextLevel === 'aal2' && levels.currentLevel !== levels.nextLevel) {
             showMfaStep();
-          } else {
-            window.location.href = 'dashboard.html';
+            return;
           }
+          var totp = (!factorsResult.error && factorsResult.data && factorsResult.data.totp) || [];
+          var verified = totp.filter(function (f) { return f.status === 'verified'; });
+          if (verified.length === 0) {
+            showEnrollStep();
+            return;
+          }
+          window.location.href = 'dashboard.html';
         });
       }
 
@@ -404,16 +516,44 @@
           return;
         }
 
-        var userEmail = document.getElementById('portal-user-email');
-        if (userEmail) userEmail.textContent = session.user.email;
+        ensureAal2(session).then(function (ok) {
+          if (!ok) return; // ensureAal2 already sent them back to index.html
 
-        var firstName = firstNameFor(session.user);
-        var welcomeName = document.getElementById('portal-welcome-name');
-        if (welcomeName) welcomeName.textContent = firstName;
-        var avatar = document.getElementById('portal-avatar');
-        if (avatar) avatar.textContent = firstName.charAt(0).toUpperCase();
+          var userEmail = document.getElementById('portal-user-email');
+          if (userEmail) userEmail.textContent = session.user.email;
 
-        loadEntities(session);
+          var firstName = firstNameFor(session.user);
+          var welcomeName = document.getElementById('portal-welcome-name');
+          if (welcomeName) welcomeName.textContent = firstName;
+          var avatar = document.getElementById('portal-avatar');
+          if (avatar) avatar.textContent = firstName.charAt(0).toUpperCase();
+
+          loadEntities(session);
+        });
+      });
+    }
+
+    // 2FA is compulsory. A session that hasn't actually completed a code
+    // challenge — whether the account has never enrolled, or has enrolled
+    // but this particular sign-in only did the password step — has nowhere
+    // useful to go on this page (the database would just refuse every
+    // query anyway, per supabase-schema.sql), so send it back to
+    // index.html, which walks it through whichever of those two steps
+    // applies. Kept here (rather than only on the login page) so that
+    // reaching dashboard.html directly with an old, insufficiently
+    // authenticated session can't skip enrollment. Same check, same
+    // reasoning, in property.js and person.js.
+    function ensureAal2(session) {
+      return Promise.all([
+        client.auth.mfa.getAuthenticatorAssuranceLevel(),
+        client.auth.mfa.listFactors()
+      ]).then(function (results) {
+        var levelsResult = results[0];
+        if (levelsResult.error || !levelsResult.data || levelsResult.data.currentLevel !== 'aal2') {
+          window.location.href = 'index.html';
+          return false;
+        }
+        return true;
       });
     }
 

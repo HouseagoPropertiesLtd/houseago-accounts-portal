@@ -311,24 +311,25 @@ create policy "Upload-permitted users delete entity files"
 -- ---------------------------------------------------------------------------
 -- 5. Two-factor authentication (TOTP) enforcement
 -- ---------------------------------------------------------------------------
--- Each account can turn on two-factor authentication (an authenticator app
--- code, in addition to their password) from security.html, using
--- Supabase Auth's own built-in MFA support — nothing extra to run for that
--- part, it's already active as soon as your project exists. What this
--- section adds is the enforcement: without it, someone could still sign in
--- with just a password and read/upload documents even after turning 2FA
--- on, because the site's own login page is just JavaScript a browser could
--- be told to skip. These policies make the database itself refuse to hand
--- back portal_access rows, documents, or files to a session that hasn't
--- actually completed a 2FA challenge, for any account that has a verified
--- authenticator app set up. An account that has never turned 2FA on is
--- completely unaffected — this only ever tightens things for an account
--- that opted in.
+-- Two-factor authentication (an authenticator app code, in addition to a
+-- password) is compulsory for every account — set up from security.html,
+-- or, for an account that hasn't enrolled yet, walked through immediately
+-- on the login page itself (index.html/auth.js) straight after the
+-- password step, before it ever reaches the dashboard. Uses Supabase
+-- Auth's own built-in MFA support — nothing extra to run for that part,
+-- it's already active as soon as your project exists. What this section
+-- adds is the enforcement: without it, someone could still sign in with
+-- just a password and read/upload documents, because the site's own login
+-- page is just JavaScript a browser could be told to skip. These policies
+-- make the database itself refuse to hand back portal_access rows,
+-- documents, or files to any session that hasn't actually completed a 2FA
+-- challenge this login — including an account that has never enrolled at
+-- all, since 2FA isn't optional here.
 --
--- mfa_ok() is true when either (a) the current session's assurance level
--- is "aal2" (a password AND a verified TOTP code, this login), or (b) the
--- signed-in user has no verified TOTP factor at all (2FA not turned on for
--- this account, so nothing extra to require).
+-- mfa_ok() is true only when the current session's assurance level is
+-- "aal2" — a password AND a verified TOTP code, this login. There is
+-- deliberately no exemption for an account with no verified factor: every
+-- account is required to have one.
 create or replace function public.mfa_ok()
 returns boolean
 language sql
@@ -336,12 +337,7 @@ stable
 security definer
 set search_path = public, auth
 as $$
-  select
-    coalesce((auth.jwt() ->> 'aal'), 'aal1') = 'aal2'
-    or not exists (
-      select 1 from auth.mfa_factors
-      where user_id = auth.uid() and status = 'verified'
-    );
+  select coalesce((auth.jwt() ->> 'aal'), 'aal1') = 'aal2';
 $$;
 
 revoke all on function public.mfa_ok() from public, anon;

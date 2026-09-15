@@ -125,10 +125,32 @@
       return;
     }
 
+    // 2FA is compulsory (see supabase-schema.sql) — a session that hasn't
+    // completed a code challenge (never enrolled, or enrolled but not
+    // challenged this sign-in) is sent back to index.html to sort that out
+    // first, same check as dashboard.js/property.js, so reaching this page
+    // directly with an old session can't skip it.
+    function ensureAal2() {
+      return Promise.all([
+        client.auth.mfa.getAuthenticatorAssuranceLevel(),
+        client.auth.mfa.listFactors()
+      ]).then(function (results) {
+        var levelsResult = results[0];
+        if (levelsResult.error || !levelsResult.data || levelsResult.data.currentLevel !== 'aal2') {
+          window.location.href = 'index.html';
+          return false;
+        }
+        return true;
+      });
+    }
+
     client.auth.getSession().then(function (result) {
       var session = result.data.session;
       if (!session) { window.location.href = 'index.html'; return; }
-      loadPerson(person, session);
+      ensureAal2().then(function (ok) {
+        if (!ok) return;
+        loadPerson(person, session);
+      });
     });
 
     function subEntitiesFor(person) {

@@ -89,8 +89,14 @@
       <button type="submit" class="btn btn-primary">Verify and continue</button>
     </form>
 
+    <div id="portal-enroll-wrap" hidden>
+      <p style="margin:0 0 4px;">Two-factor authentication is required for every account. Set it up now to continue &mdash; this only takes a minute.</p>
+      <div id="portal-enroll-card"><p>Setting up&hellip;</p></div>
+    </div>
+
     <p class="portal-foot" id="portal-login-foot">Don't have an account? Contact Oscar to get set up.</p>
     <p class="portal-foot" id="portal-mfa-foot" hidden><a href="#" id="portal-mfa-cancel">Not you, or don't have your device? Log out</a></p>
+    <p class="portal-foot" id="portal-enroll-foot" hidden><a href="#" id="portal-enroll-cancel">Not you, or don't have your device? Log out</a></p>
 
     <div class="portal-note" id="portal-setup-note" hidden>
       This portal is not connected to a database yet. Add your Supabase project details to <code>assets/supabase-config.js</code>, then follow <code>SETUP.md</code> to create accounts and add documents.
