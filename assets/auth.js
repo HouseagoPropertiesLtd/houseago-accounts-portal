@@ -650,6 +650,43 @@
             });
           }
 
+          // A property whose base id has no portal_access row of its own —
+          // because only its Compliance & Tenancy and/or Insurance is
+          // granted (3 Horning Close, deliberately: no Documents/Income
+          // access at the property level any more — see the note above
+          // the entities insert in supabase-schema.sql) — would otherwise
+          // never get a card here at all: topLevel below is built only
+          // from rows that exist, the row that would produce the card
+          // doesn't exist, and its Compliance & Tenancy/Insurance rows are
+          // always satellites (isSatellite above). This synthesizes that
+          // missing base row purely for the dashboard card — property.html
+          // itself already copes fine with no base access, since it merges
+          // whichever of the four sub-entities the viewer actually has.
+          var subNamesById = {};
+          access.forEach(function (row) { subNamesById[row.entities.id] = row.entities.name; });
+          var syntheticBaseRows = [];
+          var seenBaseIds = {};
+          access.forEach(function (row) {
+            var m = /^(.+)(?:-compliance-tenancy|-insurance)$/.exec(row.entities.id);
+            if (!m) return;
+            var baseId = m[1];
+            if (idSet[baseId] || seenBaseIds[baseId]) return;
+            seenBaseIds[baseId] = true;
+            var name = (subNamesById[baseId + '-compliance-tenancy'] || '').replace(/ - Compliance.*$/, '') ||
+              (subNamesById[baseId + '-insurance'] || '').replace(/ - Insurance.*$/, '') || baseId;
+            syntheticBaseRows.push({
+              can_upload: false,
+              entities: {
+                id: baseId,
+                name: name,
+                sort_order: (row.entities.sort_order || 0) - 0.5
+              }
+            });
+          });
+          syntheticBaseRows.forEach(function (row) { idSet[row.entities.id] = true; });
+          access = access.concat(syntheticBaseRows);
+          access.sort(function (a, b) { return (a.entities.sort_order || 0) - (b.entities.sort_order || 0); });
+
           var topLevel = access.filter(function (row) { return !isSatellite(row.entities.id); });
 
           function cardHtmlForRow(row) {
