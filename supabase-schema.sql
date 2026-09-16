@@ -484,13 +484,17 @@ create policy "Require completed 2FA once enrolled"
 --   ('SALLY_USER_ID', 'wild-thyme-insurance', true),
 --   ('SALLY_USER_ID', 'wild-thyme-income', true);
 
--- Bookkeeper/accountant, full access (Charlotte, Tatiana, and Dominic at
--- Triple Bottom Line Accounting were set up this way on 15 Sep 2026):
--- every entity, view AND upload, so they can both pull records and file
--- things like prepared accounts back into the portal. The simplest way
--- to grant this to a new person is the one used for these three — select
--- every entity except the deprecated 3-horning-close rows, rather than
--- listing each one by hand:
+-- Bookkeeper/accountant, financial access only (Charlotte, Tatiana, and
+-- Dominic at Triple Bottom Line Accounting were set up this way on 15 Sep
+-- 2026, and had their Compliance & Tenancy AND Insurance access revoked
+-- on 16 Sep 2026 — accountants see financial information only, never
+-- compliance certificates, tenancy paperwork, or insurance): every entity
+-- EXCEPT *-compliance-tenancy and *-insurance ones, view AND upload, so
+-- they can both pull records and file things like prepared accounts back
+-- into the portal. The simplest way to grant this to a new person is the
+-- one used for these three — select every entity except the deprecated
+-- 3-horning-close rows and every *-compliance-tenancy/*-insurance entity,
+-- rather than listing each one by hand:
 --
 -- insert into public.portal_access (user_id, entity_id, can_upload)
 -- select u.id, e.id, true
@@ -498,15 +502,16 @@ create policy "Require completed 2FA once enrolled"
 -- cross join public.entities e
 -- where u.email = 'NEW_PERSON_EMAIL'
 --   and e.id not in ('3-horning-close', '3-horning-close-income', '3-horning-close-insurance')
+--   and e.id not like '%-compliance-tenancy'
+--   and e.id not like '%-insurance'
 -- on conflict (user_id, entity_id) do update set can_upload = excluded.can_upload;
 --
--- For a more restricted accountant (read-only, or excluded from
--- Insurance/Compliance & Tenancy) build the row list by hand instead,
--- following Oscar's or Sally's example above, setting can_upload to
--- false and/or leaving specific *-insurance / *-compliance-tenancy
--- entities out entirely — with no portal_access row for a given entity,
--- it never appears for them at all, not even to view. A partial-access
--- property viewer (base row and/or -income row, but not
+-- For an even more restricted accountant (read-only, or with only some
+-- properties) build the row list by hand instead, following Oscar's or
+-- Sally's example above, setting can_upload to false and/or leaving
+-- specific entities out entirely — with no portal_access row for a given
+-- entity, it never appears for them at all, not even to view. A
+-- partial-access property viewer (base row and/or -income row, but not
 -- -compliance-tenancy or -insurance) gets that property nested inside
 -- the relevant owner's person.html page instead of its own card — see
 -- PROPERTY_OWNERS in auth.js.
