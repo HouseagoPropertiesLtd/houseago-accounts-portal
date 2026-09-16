@@ -200,12 +200,29 @@
     var DOC_SUBS = SUB_ENTITIES.filter(function (s) { return s.kind !== 'income'; });
     var INCOME_SUB = SUB_ENTITIES.filter(function (s) { return s.kind === 'income'; })[0];
 
+    // A company-owned property (3 Horning Close) has no Documents/Income
+    // access of its own any more — its rent and expenses are tracked as
+    // Houseago Properties Ltd's own business income (see
+    // ltd-company-income), not as a separate per-property ledger, and it
+    // never gets its own dashboard card or page (see assets/auth.js). Only
+    // its Compliance & Tenancy still exists as a distinct section, and it
+    // renders nested right here, inside the owning company entity's own
+    // page — the same idea as person.js nesting a partial-access property
+    // inside a person's page, just one level up. Kept in sync by hand with
+    // COMPANY_OWNED_PROPERTY_IDS/PROPERTY_OWNERS in assets/auth.js.
+    var NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY = {
+      'ltd-company': ['3-horning-close']
+    };
+
     function loadProperty(propertyId, session) {
       var ids = SUB_ENTITIES.map(function (s) { return propertyId + s.suffix; });
+      var nestedPids = NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY[propertyId] || [];
+      var nestedComplianceIds = nestedPids.map(function (pid) { return pid + '-compliance-tenancy'; });
+      var allIds = ids.concat(nestedComplianceIds);
 
       Promise.all([
-        client.from('entities').select('id, name').in('id', ids),
-        client.from('portal_access').select('entity_id, can_upload').in('entity_id', ids)
+        client.from('entities').select('id, name').in('id', allIds),
+        client.from('portal_access').select('entity_id, can_upload').in('entity_id', allIds)
       ]).then(function (results) {
         var entitiesResult = results[0], accessResult = results[1];
 
@@ -223,8 +240,9 @@
         (accessResult.data || []).forEach(function (row) { accessById[row.entity_id] = row.can_upload; });
 
         var visibleSubs = SUB_ENTITIES.filter(function (s) { return accessById.hasOwnProperty(propertyId + s.suffix); });
+        var visibleNestedPids = nestedPids.filter(function (pid) { return accessById.hasOwnProperty(pid + '-compliance-tenancy'); });
 
-        if (visibleSubs.length === 0) {
+        if (visibleSubs.length === 0 && visibleNestedPids.length === 0) {
           titleEl.textContent = 'Property not found';
           sectionsEl.hidden = true;
           notFoundEl.hidden = false;
@@ -242,14 +260,27 @@
         var packHtml = taxYearPackHtml();
         var incomeHtml = hasIncome ? incomeCardHtml(incomeEntityId, !!accessById[incomeEntityId]) : '';
         var documentsHtml = visibleDocSubs.length > 0 ? documentsCardHtml(propertyId, visibleDocSubs, accessById) : '';
+        var nestedHtml = visibleNestedPids.map(function (pid) {
+          var entityId = pid + '-compliance-tenancy';
+          var name = (namesById[entityId] || '').replace(/ - Compliance.*$/, '') || pid;
+          return nestedCompliancePropertyHtml(entityId, name, !!accessById[entityId]);
+        }).join('');
 
         // Income & Outgoings before Documents: the financial ledger sits
-        // right near the top, not buried under everything else.
-        sectionsEl.innerHTML = packHtml + incomeHtml + documentsHtml;
+        // right near the top, not buried under everything else. The tax
+        // year pack stays a single card at the very top of the page —
+        // nested properties don't get one of their own; whatever they
+        // file is still covered by this page's own pack (see visibleIds
+        // below). Receipts & Invoices linked to this page sits right at
+        // the bottom — this page's own property, not the nested one, so
+        // it's excluded there entirely.
+        sectionsEl.innerHTML = packHtml + incomeHtml + documentsHtml + nestedHtml + linkedReceiptsCardHtml(propertyId);
 
-        var visibleIds = visibleSubs.map(function (s) { return propertyId + s.suffix; });
+        var visibleIds = visibleSubs.map(function (s) { return propertyId + s.suffix; })
+          .concat(visibleNestedPids.map(function (pid) { return pid + '-compliance-tenancy'; }));
         var docEntityIds = visibleDocSubs.map(function (s) { return propertyId + s.suffix; });
-        loadDocuments(visibleIds, accessById, session, propertyId, docEntityIds);
+        var nestedComplianceVisibleIds = visibleNestedPids.map(function (pid) { return pid + '-compliance-tenancy'; });
+        loadDocuments(visibleIds, accessById, session, propertyId, docEntityIds, nestedComplianceVisibleIds);
 
         if (hasIncome) {
           if (accessById[incomeEntityId]) {
@@ -261,6 +292,12 @@
 
         var uploadableDocSubs = visibleDocSubs.filter(function (s) { return accessById[propertyId + s.suffix]; });
         if (uploadableDocSubs.length > 0) wireUploadForm(propertyId, uploadableDocSubs, session);
+
+        nestedComplianceVisibleIds.forEach(function (entityId) {
+          if (accessById[entityId]) wireNestedComplianceUploadForm(entityId, session, propertyId);
+        });
+
+        loadLinkedReceipts(propertyId);
 
         wireTaxYearPack(visibleIds, baseName);
       });
@@ -489,6 +526,126 @@
       });
     }
 
+    // --- A nested company-owned property's Compliance & Tenancy only
+    // (3 Horning Close, on the Ltd company's own page) — deliberately
+    // narrower than documentsCardHtml above: no "General" documents, no
+    // Insurance, and no Income & Outgoings section at all, since none of
+    // that exists for this property any more (its rent and expenses are
+    // Houseago Properties Ltd's own business income — tracked above, on
+    // this same page, not here). No wording below mentions finances,
+    // rent, or expenses for the same reason.
+
+    function nestedCompliancePropertyHtml(entityId, name, canUpload) {
+      return (
+        '<div class="entity-card">' +
+          '<div class="section-head left"><h2>' + escapeHtml(name) + ' &mdash; Compliance &amp; Tenancy</h2></div>' +
+          '<p>Compliance certificates and tenancy paperwork for ' + escapeHtml(name) + ' — gas safety, EICR, EPC, legionella, deposit protection, and inventory documents, tracked the same way as every other property.</p>' +
+          '<div class="compliance-status" data-compliance-status="' + entityId + '"></div>' +
+          '<div class="year-filter-row" data-year-filter="' + entityId + '" hidden>' +
+            '<label for="year-select-' + entityId + '">Year</label>' +
+            '<select id="year-select-' + entityId + '" data-year-select></select>' +
+          '</div>' +
+          '<div class="doc-list" data-doc-list="' + entityId + '"><div class="doc-row"><div class="doc-row-main"><div>Loading documents&hellip;</div></div></div></div>' +
+          (canUpload ? nestedComplianceUploadFormHtml(entityId) : '') +
+        '</div>'
+      );
+    }
+
+    function nestedComplianceUploadFormHtml(entityId) {
+      var currentYear = new Date().getFullYear();
+      var yearOptions = '<option value="">Not labelled</option>';
+      for (var y = currentYear + 1; y >= currentYear - 8; y--) {
+        yearOptions += '<option value="' + y + '">' + y + '</option>';
+      }
+      return (
+        '<form class="form-card upload-form" data-upload-entity="' + entityId + '">' +
+          '<div class="form-grid-2">' +
+            '<div><label>Document name</label><input type="text" name="name" required placeholder="e.g. Gas Safety Certificate 2027"></div>' +
+            '<div><label>Category (optional)</label><input type="text" name="category" placeholder="e.g. Filed 14 July 2026"></div>' +
+          '</div>' +
+          '<div><label>Is this one of the tracked certificates?</label><select name="compliance_type">' +
+            '<option value="">No — general document (tenancy agreement, etc.)</option>' +
+            COMPLIANCE_TYPES.map(function (t) { return '<option value="' + t.id + '">' + escapeHtml(t.label) + '</option>'; }).join('') +
+          '</select></div>' +
+          '<div class="form-grid-2">' +
+            '<div><label>Year (optional)</label><select name="year">' + yearOptions + '</select></div>' +
+            '<div><label>Valid until (required for a tracked compliance certificate, optional otherwise)</label><input type="date" name="valid_until"></div>' +
+          '</div>' +
+          window.HouseagoDocScan.captureFieldHtml({ label: 'File' }) +
+          '<button type="submit" class="btn btn-primary">Upload document</button>' +
+          '<p class="form-status" role="status"></p>' +
+        '</form>'
+      );
+    }
+
+    // reloadPropertyId is the page actually being viewed (e.g. 'ltd-company')
+    // — never derived from entityId, since a nested entity's own id (e.g.
+    // '3-horning-close-compliance-tenancy') belongs to a different property
+    // than the page it's nested inside.
+    function wireNestedComplianceUploadForm(entityId, session, reloadPropertyId) {
+      var form = sectionsEl.querySelector('[data-upload-entity="' + entityId + '"]');
+      if (!form) return;
+
+      var capture = window.HouseagoDocScan.wireCaptureField(form, {
+        dateInput: form.querySelector('input[name="valid_until"]')
+      });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var file = capture.getFile();
+        if (!file) { form.querySelector('.form-status').textContent = 'Please take a photo or choose a file first.'; return; }
+
+        var name = form.querySelector('input[name="name"]').value.trim();
+        var category = form.querySelector('input[name="category"]').value.trim();
+        var year = form.querySelector('select[name="year"]').value;
+        var validUntil = form.querySelector('input[name="valid_until"]').value;
+        var complianceField = form.querySelector('select[name="compliance_type"]');
+        var complianceType = complianceField ? (complianceField.value || null) : null;
+        var status = form.querySelector('.form-status');
+        var submitBtn = form.querySelector('button[type="submit"]');
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Uploading…';
+        status.textContent = '';
+
+        window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
+          var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+          var path = entityId + '/' + Date.now() + '-' + safeFileName;
+
+          client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
+            if (uploadResult.error) {
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Upload document';
+              status.textContent = 'Could not upload that file. Please try again.';
+              return;
+            }
+
+            client.from('entity_documents').insert({
+              entity_id: entityId,
+              name: name,
+              category: category || null,
+              year: year || null,
+              valid_until: validUntil || null,
+              compliance_type: complianceType,
+              file_path: path,
+              uploaded_by: session.user.id
+            }).then(function (insertResult) {
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Upload document';
+              if (insertResult.error) {
+                status.textContent = 'The file uploaded, but could not be added to the document list. Please try again.';
+                return;
+              }
+              status.textContent = 'Uploaded.';
+              form.reset();
+              capture.reset();
+              loadProperty(reloadPropertyId, session);
+            });
+          });
+        });
+      });
+    }
+
     function renderComplianceStatus(entityId, docs) {
       var panel = sectionsEl.querySelector('[data-compliance-status="' + entityId + '"]');
       if (!panel) return;
@@ -499,7 +656,7 @@
       }).join('');
     }
 
-    function renderDocRow(doc, accessById, session, showType) {
+    function renderDocRow(doc, accessById, session, showType, reloadPropertyId) {
       var entityId = doc.entity_id;
       var isIncome = /-income$/.test(entityId);
       var metaBits = [];
@@ -508,6 +665,7 @@
       if (doc.category) metaBits.push(doc.category);
       if (isIncome && doc.amount != null) metaBits.push('£' + Number(doc.amount).toFixed(2));
       if (isIncome && doc.doc_date) metaBits.push(formatDate(doc.doc_date));
+      if (isIncome && doc.notes) metaBits.push(doc.notes);
       if (doc.year) metaBits.push(doc.year);
       if (doc.valid_until) metaBits.push('Valid until ' + doc.valid_until);
 
@@ -543,7 +701,7 @@
           if (!window.confirm('Delete "' + doc.name + '"? This cannot be undone.')) return;
           var afterDelete = function () {
             client.from('entity_documents').delete().eq('id', doc.id).then(function () {
-              loadProperty(basePropertyId(entityId), session);
+              loadProperty(reloadPropertyId, session);
             });
           };
           if (doc.file_path) client.storage.from('owner-documents').remove([doc.file_path]).then(afterDelete);
@@ -553,7 +711,7 @@
       return row;
     }
 
-    function renderDocList(listEl, docs, selectedYear, accessById, session, showType) {
+    function renderDocList(listEl, docs, selectedYear, accessById, session, showType, reloadPropertyId) {
       var filtered = selectedYear ? docs.filter(function (doc) { return String(doc.year || '') === selectedYear; }) : docs;
       listEl.innerHTML = '';
       if (filtered.length === 0) {
@@ -562,10 +720,17 @@
           '</div></div></div>';
         return;
       }
-      filtered.forEach(function (doc) { listEl.appendChild(renderDocRow(doc, accessById, session, showType)); });
+      filtered.forEach(function (doc) { listEl.appendChild(renderDocRow(doc, accessById, session, showType, reloadPropertyId)); });
     }
 
-    function renderEntityDocList(listKey, docs, hadError, accessById, session, showType) {
+    // reloadPropertyId is always the property.html page actually being
+    // viewed (e.g. 'ltd-company'), passed straight through from
+    // loadProperty/loadDocuments — never derived from listKey/entityId,
+    // since a nested property's own doc-list (e.g.
+    // '3-horning-close-compliance-tenancy') belongs to a different
+    // property than the page it's nested inside, and a delete there needs
+    // to reload the page, not that other property.
+    function renderEntityDocList(listKey, docs, hadError, accessById, session, showType, reloadPropertyId) {
       var listEl = sectionsEl.querySelector('[data-doc-list="' + listKey + '"]');
       if (!listEl) return;
       if (hadError) {
@@ -583,15 +748,15 @@
         if (years.length > 0) {
           filterRow.hidden = false;
           yearSelect.innerHTML = '<option value="">All years</option>' + years.map(function (y) { return '<option value="' + y + '">' + y + '</option>'; }).join('');
-          yearSelect.onchange = function () { renderDocList(listEl, docs, yearSelect.value, accessById, session, showType); };
+          yearSelect.onchange = function () { renderDocList(listEl, docs, yearSelect.value, accessById, session, showType, reloadPropertyId); };
         } else {
           filterRow.hidden = true;
         }
       }
-      renderDocList(listEl, docs, yearSelect ? yearSelect.value : '', accessById, session, showType);
+      renderDocList(listEl, docs, yearSelect ? yearSelect.value : '', accessById, session, showType, reloadPropertyId);
     }
 
-    function loadDocuments(entityIds, accessById, session, propertyId, docEntityIds) {
+    function loadDocuments(entityIds, accessById, session, propertyId, docEntityIds, nestedComplianceIds) {
       client.from('entity_documents').select('*').in('entity_id', entityIds).order('created_at', { ascending: false }).then(function (result) {
         var byEntity = {};
         entityIds.forEach(function (id) { byEntity[id] = []; });
@@ -603,7 +768,16 @@
 
         // Income & Outgoings keeps its own single-entity list.
         entityIds.filter(function (id) { return /-income$/.test(id); }).forEach(function (entityId) {
-          renderEntityDocList(entityId, byEntity[entityId] || [], result.error, accessById, session, false);
+          renderEntityDocList(entityId, byEntity[entityId] || [], result.error, accessById, session, false, propertyId);
+        });
+
+        // A nested company-owned property's Compliance & Tenancy (3
+        // Horning Close, on the Ltd company's page) also keeps its own
+        // single-entity list, separate from this page's own merged
+        // Documents card below — it's a different property's paperwork,
+        // just filed inside this page.
+        (nestedComplianceIds || []).forEach(function (entityId) {
+          renderEntityDocList(entityId, byEntity[entityId] || [], result.error, accessById, session, false, propertyId);
         });
 
         // The merged Documents card pools docs from every doc-type entity
@@ -614,7 +788,7 @@
           var merged = [];
           docEntityIds.forEach(function (id) { merged = merged.concat(byEntity[id] || []); });
           merged.sort(function (a, b) { return (b.created_at || '').localeCompare(a.created_at || ''); });
-          renderEntityDocList(propertyId + '-documents', merged, result.error, accessById, session, true);
+          renderEntityDocList(propertyId + '-documents', merged, result.error, accessById, session, true, propertyId);
         }
       });
     }
@@ -661,37 +835,76 @@
             '<div><label>Date</label><input type="date" name="doc_date"></div>' +
             '<div><label>Year (optional)</label><select name="year">' + yearOptions + '</select></div>' +
           '</div>' +
+          '<div><label>Notes (optional)</label><textarea name="notes" rows="2" placeholder="Anything else worth noting about this entry"></textarea></div>' +
+          window.HouseagoDocScan.captureFieldHtml({ label: 'Receipt or supporting document (optional)' }) +
           '<button type="submit" class="btn btn-primary">Add income entry</button>' +
           '<p class="form-status" role="status"></p>' +
         '</form>'
       );
     }
 
+    // A receipt attached here is optional — most entries are still just a
+    // typed description, amount, and date — but if one is attached it's
+    // scanned the same way as everywhere else on the site (see doc-scan.js)
+    // to try to fill in the amount and date automatically; either stays
+    // fully editable, since the scan is only ever a first guess.
     function wireIncomeEntryForm(entityId, session, propertyId) {
       var form = sectionsEl.querySelector('[data-income-entity="' + entityId + '"]');
       if (!form) return;
+
+      var capture = window.HouseagoDocScan.wireCaptureField(form, {
+        dateInput: form.querySelector('input[name="doc_date"]'),
+        amountInput: form.querySelector('input[name="amount"]')
+      });
+
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         var name = form.querySelector('input[name="name"]').value.trim();
         var amount = parseFloat(form.querySelector('input[name="amount"]').value);
         var docDate = form.querySelector('input[name="doc_date"]').value;
         var year = form.querySelector('select[name="year"]').value;
+        var notes = form.querySelector('textarea[name="notes"]').value.trim();
         var status = form.querySelector('.form-status');
+        var submitBtn = form.querySelector('button[type="submit"]');
         if (!name || isNaN(amount)) return;
 
-        client.from('entity_documents').insert({
-          entity_id: entityId,
-          name: name,
-          amount: amount,
-          doc_date: docDate || null,
-          year: year || null,
-          file_path: null,
-          uploaded_by: session.user.id
-        }).then(function (insertResult) {
-          if (insertResult.error) { status.textContent = 'Could not add that entry. Please try again.'; return; }
-          status.textContent = 'Added.';
-          form.reset();
-          loadProperty(propertyId, session);
+        function insertEntry(filePath) {
+          client.from('entity_documents').insert({
+            entity_id: entityId,
+            name: name,
+            amount: amount,
+            doc_date: docDate || null,
+            year: year || null,
+            notes: notes || null,
+            file_path: filePath || null,
+            uploaded_by: session.user.id
+          }).then(function (insertResult) {
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add income entry'; }
+            if (insertResult.error) { status.textContent = 'Could not add that entry. Please try again.'; return; }
+            status.textContent = 'Added.';
+            form.reset();
+            capture.reset();
+            loadProperty(propertyId, session);
+          });
+        }
+
+        var file = capture.getFile();
+        if (!file) { insertEntry(null); return; }
+
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Uploading…'; }
+        status.textContent = '';
+
+        window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
+          var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+          var path = entityId + '/' + Date.now() + '-' + safeFileName;
+          client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
+            if (uploadResult.error) {
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add income entry'; }
+              status.textContent = 'Could not upload that file. Please try again.';
+              return;
+            }
+            insertEntry(path);
+          });
         });
       });
     }
@@ -820,6 +1033,82 @@
           );
         }).join('');
       });
+    }
+
+    // --- Receipts & Invoices, linked to this page --------------------------
+    // A read-only view of every receipt/invoice anyone has submitted (from
+    // their own person.html page) and linked to this property or the Ltd
+    // company via "Relates to" — access, view, and download only; editing
+    // or deleting a submission still happens from wherever it was
+    // submitted, so there's one place that owns each one. RLS limits this
+    // to whichever of the three people's Receipts & Invoices the current
+    // viewer can actually see, same as the income chart's outgoing total
+    // above, which reads the same rows.
+    function linkedReceiptsCardHtml(propertyId) {
+      var listKey = propertyId + '-linked-receipts';
+      return (
+        '<div class="entity-card">' +
+          '<div class="section-head left"><h2>Receipts &amp; Invoices</h2></div>' +
+          '<p>Every receipt or invoice linked to this page via &ldquo;Relates to&rdquo; — submitted from Oscar, Sally, or Iris&rsquo;s own page, gathered here so nothing needs re-finding. Edit or delete a submission from wherever it was originally submitted.</p>' +
+          '<div class="doc-list" data-doc-list="' + listKey + '"><div class="doc-row"><div class="doc-row-main"><div>Loading&hellip;</div></div></div></div>' +
+        '</div>'
+      );
+    }
+
+    function renderLinkedReceiptRow(doc) {
+      var metaBits = [];
+      if (doc.doc_date) metaBits.push(formatDate(doc.doc_date));
+      if (doc.amount != null) metaBits.push('£' + Number(doc.amount).toFixed(2));
+      if (doc.expense_type) metaBits.push(doc.expense_type);
+      if (doc.expense_category) metaBits.push(doc.expense_category);
+      if (doc.notes) metaBits.push(doc.notes);
+
+      var row = document.createElement('div');
+      row.className = 'doc-row';
+      row.innerHTML =
+        '<div class="doc-row-main">' +
+          '<div class="doc-icon">' + docIconSvg() + '</div>' +
+          '<div>' +
+            '<div class="doc-name">' + escapeHtml(doc.name || 'Receipt') + '</div>' +
+            '<div class="doc-meta">' + escapeHtml(metaBits.join(' · ')) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="doc-row-actions">' +
+          (doc.file_path ? '<a href="#" class="btn btn-outline">Download</a>' : '') +
+        '</div>';
+
+      var downloadLink = row.querySelector('a');
+      if (downloadLink) {
+        downloadLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          client.storage.from('owner-documents').createSignedUrl(doc.file_path, 300).then(function (signedResult) {
+            if (signedResult.error || !signedResult.data) { alert('This file could not be opened. Please try again.'); return; }
+            window.open(signedResult.data.signedUrl, '_blank', 'noopener');
+          });
+        });
+      }
+      return row;
+    }
+
+    function loadLinkedReceipts(propertyId) {
+      var listKey = propertyId + '-linked-receipts';
+      var listEl = sectionsEl.querySelector('[data-doc-list="' + listKey + '"]');
+      if (!listEl) return;
+      client.from('entity_documents').select('*').in('entity_id', RECEIPTS_ENTITY_IDS).eq('related_entity_id', propertyId)
+        .order('doc_date', { ascending: false, nullsFirst: false })
+        .then(function (result) {
+          if (result.error) {
+            listEl.innerHTML = '<div class="doc-row"><div class="doc-row-main"><div>Could not load these right now.</div></div></div>';
+            return;
+          }
+          var docs = result.data || [];
+          if (docs.length === 0) {
+            listEl.innerHTML = '<div class="doc-row"><div class="doc-row-main"><div>Nothing linked here yet.</div></div></div>';
+            return;
+          }
+          listEl.innerHTML = '';
+          docs.forEach(function (doc) { listEl.appendChild(renderLinkedReceiptRow(doc)); });
+        });
     }
   });
 })();

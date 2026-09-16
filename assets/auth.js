@@ -51,8 +51,13 @@
   // Someone with full access (Oscar, Sally) always gets the property's own
   // page regardless of this table. A property can list more than one
   // person (33 North Denes is jointly Oscar and Sally's).
+  //
+  // 3 Horning Close isn't listed here — it's owned by Houseago Properties
+  // Ltd, not any one person, and has no Documents/Income access of its own
+  // any more (see COMPANY_OWNED_PROPERTY_IDS below), so it never nests
+  // under a person; it nests under the Ltd company's own page instead —
+  // see NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY in assets/property.js.
   var PROPERTY_OWNERS = {
-    '3-horning-close': ['oscar'],
     '33-north-denes': ['oscar', 'sally'],
     'wild-thyme': ['sally'],
     '6-chaucer-street': ['iris'],
@@ -650,43 +655,14 @@
             });
           }
 
-          // A property whose base id has no portal_access row of its own —
-          // because only its Compliance & Tenancy and/or Insurance is
-          // granted (3 Horning Close, deliberately: no Documents/Income
-          // access at the property level any more — see the note above
-          // the entities insert in supabase-schema.sql) — would otherwise
-          // never get a card here at all: topLevel below is built only
-          // from rows that exist, the row that would produce the card
-          // doesn't exist, and its Compliance & Tenancy/Insurance rows are
-          // always satellites (isSatellite above). This synthesizes that
-          // missing base row purely for the dashboard card — property.html
-          // itself already copes fine with no base access, since it merges
-          // whichever of the four sub-entities the viewer actually has.
-          var subNamesById = {};
-          access.forEach(function (row) { subNamesById[row.entities.id] = row.entities.name; });
-          var syntheticBaseRows = [];
-          var seenBaseIds = {};
-          access.forEach(function (row) {
-            var m = /^(.+)(?:-compliance-tenancy|-insurance)$/.exec(row.entities.id);
-            if (!m) return;
-            var baseId = m[1];
-            if (idSet[baseId] || seenBaseIds[baseId]) return;
-            seenBaseIds[baseId] = true;
-            var name = (subNamesById[baseId + '-compliance-tenancy'] || '').replace(/ - Compliance.*$/, '') ||
-              (subNamesById[baseId + '-insurance'] || '').replace(/ - Insurance.*$/, '') || baseId;
-            syntheticBaseRows.push({
-              can_upload: false,
-              entities: {
-                id: baseId,
-                name: name,
-                sort_order: (row.entities.sort_order || 0) - 0.5
-              }
-            });
-          });
-          syntheticBaseRows.forEach(function (row) { idSet[row.entities.id] = true; });
-          access = access.concat(syntheticBaseRows);
-          access.sort(function (a, b) { return (a.entities.sort_order || 0) - (b.entities.sort_order || 0); });
-
+          // 3 Horning Close (see COMPANY_OWNED_PROPERTY_IDS below) has no
+          // Documents/Income access of its own any more — only its
+          // Compliance & Tenancy — which isSatellite above always excludes
+          // from topLevel. That's deliberate: it never gets a card (or a
+          // page) of its own here at all. It renders nested inside the Ltd
+          // company's own page instead — see
+          // NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY in assets/property.js,
+          // kept in sync by hand with this file.
           var topLevel = access.filter(function (row) { return !isSatellite(row.entities.id); });
 
           function cardHtmlForRow(row) {
@@ -726,17 +702,16 @@
           // just "Documents + Income & Outgoings," but it isn't a property
           // from Oscar's point of view, so it gets its own group here.
           var COMPANY_ENTITY_IDS = ['ltd-company'];
-          // 3 Horning Close is owned by Houseago Properties Ltd (a company
-          // asset, not personal property — see the note above the entities
-          // insert in supabase-schema.sql), so its rent counts as the Ltd's
-          // business income/expenses. It sits in the Company group here,
-          // below the Ltd company's own card, rather than in Properties
-          // alongside the personally-owned properties — for anyone who gets
-          // a full card for it (Oscar, Sally, an accountant/bookkeeper with
-          // full access). A partial-access viewer (Documents/Income only)
-          // still nests it under Oscar's page via PROPERTY_OWNERS above,
-          // since there's no equivalent "company" page to nest it in yet.
-          var COMPANY_OWNED_PROPERTY_IDS = ['3-horning-close'];
+          // Reserved for a company-owned property that (unlike 3 Horning
+          // Close) actually has its own Documents/Income access one day —
+          // it would then group under Company here rather than Properties.
+          // 3 Horning Close itself never reaches this list in practice: it
+          // has no Documents/Income access at all any more, only Compliance
+          // & Tenancy, which is always a satellite (isSatellite above) and
+          // so never becomes a topLevel row here — it renders nested inside
+          // the Ltd company's own page instead (see
+          // NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY in assets/property.js).
+          var COMPANY_OWNED_PROPERTY_IDS = [];
           var GROUP_LABELS = { company: 'Company', properties: 'Properties', people: 'People' };
           var GROUP_ORDER = ['company', 'properties', 'people'];
           var grouped = { company: [], properties: [], people: [] };

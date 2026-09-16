@@ -34,9 +34,12 @@
 
   // Which properties group under this person for someone who can't see
   // their Compliance & Tenancy or Insurance sections — kept in sync by
-  // hand with the same table in assets/auth.js.
+  // hand with the same table in assets/auth.js. 3 Horning Close isn't
+  // listed for anyone here — it's owned by Houseago Properties Ltd, not a
+  // person, and nests under the Ltd company's own page instead (see
+  // NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY in assets/property.js).
   var PROPERTIES_BY_PERSON = {
-    oscar: ['3-horning-close', '33-north-denes'],
+    oscar: ['33-north-denes'],
     sally: ['33-north-denes', 'wild-thyme'],
     iris: ['6-chaucer-street', '6a-chaucer-street']
   };
@@ -328,37 +331,73 @@
             '<div><label>Date</label><input type="date" name="doc_date"></div>' +
             '<div><label>Year (optional)</label><select name="year">' + yearOptions + '</select></div>' +
           '</div>' +
+          '<div><label>Notes (optional)</label><textarea name="notes" rows="2" placeholder="Anything else worth noting about this entry"></textarea></div>' +
+          window.HouseagoDocScan.captureFieldHtml({ label: 'Receipt or supporting document (optional)' }) +
           '<button type="submit" class="btn btn-primary">Add income entry</button>' +
           '<p class="form-status" role="status"></p>' +
         '</form>'
       );
     }
 
+    // A receipt attached here is optional — see the matching note in
+    // assets/property.js's own copy of this form, which this mirrors.
     function wireIncomeEntryForm(entityId, session, person) {
       var form = sectionsEl.querySelector('[data-income-entity="' + entityId + '"]');
       if (!form) return;
+
+      var capture = window.HouseagoDocScan.wireCaptureField(form, {
+        dateInput: form.querySelector('input[name="doc_date"]'),
+        amountInput: form.querySelector('input[name="amount"]')
+      });
+
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         var name = form.querySelector('input[name="name"]').value.trim();
         var amount = parseFloat(form.querySelector('input[name="amount"]').value);
         var docDate = form.querySelector('input[name="doc_date"]').value;
         var year = form.querySelector('select[name="year"]').value;
+        var notes = form.querySelector('textarea[name="notes"]').value.trim();
         var status = form.querySelector('.form-status');
+        var submitBtn = form.querySelector('button[type="submit"]');
         if (!name || isNaN(amount)) return;
 
-        client.from('entity_documents').insert({
-          entity_id: entityId,
-          name: name,
-          amount: amount,
-          doc_date: docDate || null,
-          year: year || null,
-          file_path: null,
-          uploaded_by: session.user.id
-        }).then(function (insertResult) {
-          if (insertResult.error) { status.textContent = 'Could not add that entry. Please try again.'; return; }
-          status.textContent = 'Added.';
-          form.reset();
-          loadPerson(person, session);
+        function insertEntry(filePath) {
+          client.from('entity_documents').insert({
+            entity_id: entityId,
+            name: name,
+            amount: amount,
+            doc_date: docDate || null,
+            year: year || null,
+            notes: notes || null,
+            file_path: filePath || null,
+            uploaded_by: session.user.id
+          }).then(function (insertResult) {
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add income entry'; }
+            if (insertResult.error) { status.textContent = 'Could not add that entry. Please try again.'; return; }
+            status.textContent = 'Added.';
+            form.reset();
+            capture.reset();
+            loadPerson(person, session);
+          });
+        }
+
+        var file = capture.getFile();
+        if (!file) { insertEntry(null); return; }
+
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Uploading…'; }
+        status.textContent = '';
+
+        window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
+          var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+          var path = entityId + '/' + Date.now() + '-' + safeFileName;
+          client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
+            if (uploadResult.error) {
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add income entry'; }
+              status.textContent = 'Could not upload that file. Please try again.';
+              return;
+            }
+            insertEntry(path);
+          });
         });
       });
     }
@@ -600,6 +639,7 @@
       if (doc.category) metaBits.push(doc.category);
       if (isIncome && doc.amount != null) metaBits.push('£' + Number(doc.amount).toFixed(2));
       if (isIncome && doc.doc_date) metaBits.push(formatDate(doc.doc_date));
+      if (isIncome && doc.notes) metaBits.push(doc.notes);
       if (doc.year) metaBits.push(doc.year);
       if (doc.valid_until) metaBits.push('Valid until ' + doc.valid_until);
 

@@ -427,21 +427,21 @@
         rows.push([c.category, roundMoney(c.total)]);
       });
       rows.push([]);
-      rows.push(['Date', 'Name', 'Category', 'Amount (£)', 'Description', 'Relates to']);
+      rows.push(['Date', 'Type', 'Name', 'Category', 'Amount (£)', 'Description', 'Relates to']);
 
       entry.docs
         .slice()
         .sort(function (a, b) { return (a.doc_date || '').localeCompare(b.doc_date || ''); })
         .forEach(function (doc) {
           var related = (doc.related_entity_id && namesById[doc.related_entity_id]) ? namesById[doc.related_entity_id] : 'General / Other';
-          rows.push([doc.doc_date, doc.name || '', doc.expense_category || 'Uncategorised', roundMoney(doc.amount), doc.notes || '', related]);
+          rows.push([doc.doc_date, doc.expense_type || '', doc.name || '', doc.expense_category || 'Uncategorised', roundMoney(doc.amount), doc.notes || '', related]);
         });
 
       rows.push([]);
-      rows.push(['', '', 'Year total', roundMoney(entry.total), '', '']);
+      rows.push(['', '', '', 'Year total', roundMoney(entry.total), '', '']);
 
       var sheet = XLSX.utils.aoa_to_sheet(rows);
-      sheet['!cols'] = [{ wch: 12 }, { wch: 28 }, { wch: 24 }, { wch: 12 }, { wch: 34 }, { wch: 20 }];
+      sheet['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 28 }, { wch: 24 }, { wch: 12 }, { wch: 34 }, { wch: 20 }];
       var sheetName = ('FY ' + entry.label).replace(/[\/\\?*\[\]:]/g, '-').slice(0, 31);
       XLSX.utils.book_append_sheet(wb, sheet, sheetName);
     });
@@ -483,6 +483,7 @@
     var listEl = document.getElementById('receipts-list');
     var relatedSelect = document.getElementById('receipt-related');
     var categorySelect = document.getElementById('receipt-category');
+    var expenseTypeSelect = document.getElementById('receipt-expense-type');
     populateCategorySelect(categorySelect);
     var form = document.getElementById('receipt-upload-form');
     var yearFilterRow = document.getElementById('receipts-year-filter');
@@ -731,6 +732,7 @@
       var metaBits = [];
       if (doc.doc_date) metaBits.push(formatDate(doc.doc_date));
       if (doc.amount != null) metaBits.push(formatCurrency(doc.amount));
+      if (doc.expense_type) metaBits.push(doc.expense_type);
       if (doc.expense_category) metaBits.push(doc.expense_category);
       if (doc.notes) metaBits.push(doc.notes);
       if (doc.related_entity_id && namesById[doc.related_entity_id]) metaBits.push(namesById[doc.related_entity_id]);
@@ -861,6 +863,7 @@
         var description = document.getElementById('receipt-description').value.trim();
         var relatedEntityId = relatedSelect.value || null;
         var expenseCategory = categorySelect.value || null;
+        var expenseType = expenseTypeSelect ? (expenseTypeSelect.value || null) : null;
         var status = document.getElementById('receipt-upload-status');
         var submitBtn = form.querySelector('button[type="submit"]');
 
@@ -889,6 +892,7 @@
               notes: description || null,
               related_entity_id: relatedEntityId,
               expense_category: expenseCategory,
+              expense_type: expenseType,
               file_path: path,
               uploaded_by: session.user.id
             }).then(function (insertResult) {

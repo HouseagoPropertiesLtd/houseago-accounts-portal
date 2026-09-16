@@ -184,6 +184,14 @@ create table if not exists public.entity_documents (
   -- the ordinary per-property document sections for a note like "Filed 14
   -- July 2026", not an expense type.
   expense_category text,
+  -- expense_type is a fixed two-way pick-list ('Property Expense' or
+  -- 'Business Expense', see EXPENSE_TYPES in receipts.js), used only by
+  -- Receipts & Invoices submissions — separate from expense_category
+  -- above (which groups WHAT kind of cost it is), this is about WHO it
+  -- belongs to for the accounts: a specific property's own running costs,
+  -- or Houseago Properties Ltd's general overheads, not tied to any one
+  -- property (accountancy fees, software, and the like).
+  expense_type text,
   -- compliance_type is set only on documents uploaded into a "...
   -- -compliance-tenancy" section, and only when the document IS one of the
   -- fixed certificate/assessment types the Compliance status panel tracks
@@ -202,15 +210,16 @@ create table if not exists public.entity_documents (
 );
 
 -- If this table already existed before year/doc_date/notes/related_entity_id/
--- amount/expense_category/compliance_type were added, these bring an
--- existing database up to date (harmless to re-run — a fresh project just
--- skips them since the columns above already created them).
+-- amount/expense_category/expense_type/compliance_type were added, these
+-- bring an existing database up to date (harmless to re-run — a fresh
+-- project just skips them since the columns above already created them).
 alter table public.entity_documents add column if not exists year text;
 alter table public.entity_documents add column if not exists doc_date date;
 alter table public.entity_documents add column if not exists notes text;
 alter table public.entity_documents add column if not exists related_entity_id text references public.entities(id) on delete set null;
 alter table public.entity_documents add column if not exists amount numeric(10, 2);
 alter table public.entity_documents add column if not exists expense_category text;
+alter table public.entity_documents add column if not exists expense_type text;
 alter table public.entity_documents add column if not exists compliance_type text;
 -- Only needed if this table was created before file_path became nullable
 -- (a fresh run of the create table above already has it right):

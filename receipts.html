@@ -104,6 +104,14 @@
           <label for="receipt-description">Description</label>
           <input type="text" id="receipt-description" name="description" placeholder="e.g. Emergency callout, paid by card">
         </div>
+        <div>
+          <label for="receipt-expense-type">Type</label>
+          <select id="receipt-expense-type" name="expense_type" required>
+            <option value="">Choose one&hellip;</option>
+            <option value="Property Expense">Property Expense</option>
+            <option value="Business Expense">Business Expense</option>
+          </select>
+        </div>
         <div class="form-grid-2">
           <div>
             <label for="receipt-category">Category (optional)</label>
