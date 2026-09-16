@@ -395,6 +395,11 @@
       var capture = window.HouseagoDocScan.wireCaptureField(form, {
         dateInput: dateInput,
         amountInput: form.querySelector('input[name="amount"]'),
+        // The Description field doubles as this form's document title, so
+        // it gets the same auto-fill every other upload form on the site
+        // gets ("Gardener", "Cleaning", etc.) — only while still empty,
+        // same as everywhere else.
+        nameInput: nameInput,
         entryTypeSelect: entryTypeSelect,
         // The document itself is a better source than a guess typed from
         // the description alone, so a scan result is allowed to override

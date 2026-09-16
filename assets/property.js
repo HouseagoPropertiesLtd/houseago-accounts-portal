@@ -869,8 +869,10 @@
     // A receipt attached here is optional — most entries are still just a
     // typed description, amount, and date — but if one is attached it's
     // scanned the same way as everywhere else on the site (see doc-scan.js)
-    // to try to fill in the amount, date, and whether it looks like income
-    // or an outgoing automatically; everything stays fully editable, since
+    // to try to fill in the amount, date, a description ("Gardener",
+    // "Cleaner"), the expense category (Repairs & maintenance, Legal &
+    // professional fees, etc.), and whether it looks like income or an
+    // outgoing, all automatically; everything stays fully editable, since
     // every guess here is only ever a first pass. The description itself is
     // also read live as it's typed ("Gardener" -> Outgoing, "Rent" ->
     // Income), so most hand-typed entries with no receipt still get a
@@ -921,6 +923,11 @@
       var capture = window.HouseagoDocScan.wireCaptureField(form, {
         dateInput: dateInput,
         amountInput: form.querySelector('input[name="amount"]'),
+        // The Description field doubles as this form's document title, so
+        // it gets the same auto-fill every other upload form on the site
+        // gets ("Gardener", "Cleaning", etc.) — only while still empty,
+        // same as everywhere else.
+        nameInput: nameInput,
         entryTypeSelect: entryTypeSelect,
         // The document itself is a better source than a guess typed from
         // the description alone, so a scan result is allowed to override
