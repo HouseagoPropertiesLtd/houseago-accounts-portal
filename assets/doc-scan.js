@@ -443,7 +443,7 @@
     return false;
   }
 
-  // wireCaptureField(form, { dateInput, amountInput, nameInput, categorySelect, yearSelect })
+  // wireCaptureField(form, { dateInput, amountInput, nameInput, categorySelect, yearSelect, entryTypeSelect, entryTypeOverridable })
   // -> { getFile, reset }
   //
   // Every field named here is filled in automatically from whatever the
@@ -452,6 +452,14 @@
   // file's picked, for the case where it turns out to be the wrong
   // document: it drops the file and undoes exactly the fields this scan
   // filled in, as long as they haven't since been changed by hand.
+  //
+  // entryTypeSelect is the one exception to "only while empty": the
+  // document itself is a better source for Income-vs-Outgoing than a
+  // live-typed guess from the description alone, so the caller can pass
+  // entryTypeOverridable (a function returning true/false) to let a scan
+  // result overwrite that earlier guess — auto-guessed from the document
+  // takes priority over auto-guessed from typing, but neither one is ever
+  // allowed to overwrite something the person actually chose by hand.
   function wireCaptureField(form, opts) {
     opts = opts || {};
     var cameraInput = form.querySelector('[data-scan-camera]');
@@ -466,8 +474,9 @@
     if (captureBtn && cameraInput) captureBtn.addEventListener('click', function () { cameraInput.click(); });
     if (chooseBtn && pickerInput) chooseBtn.addEventListener('click', function () { pickerInput.click(); });
 
-    function tryFill(el, value, message, bits) {
-      if (!el || value == null || value === '' || el.value) return;
+    function tryFill(el, value, message, bits, overridable) {
+      if (!el || value == null || value === '') return;
+      if (el.value && !(overridable && overridable())) return;
       el.value = value;
       autofilled.push({ el: el, value: String(value) });
       bits.push(message);
@@ -488,13 +497,23 @@
           tryFill(opts.categorySelect, fields.category, 'category guessed, check it’s right', bits);
         }
         if (opts.entryTypeSelect && fields.entryType && selectHasOption(opts.entryTypeSelect, fields.entryType)) {
-          tryFill(opts.entryTypeSelect, fields.entryType, 'income/outgoing guessed, check it’s right', bits);
+          // The document itself is a better source than a live-typed
+          // guess from the description alone, so it's allowed to
+          // override that guess — but never something the person
+          // actually chose by hand (see entryTypeOverridable, set by
+          // the caller in property.js/person.js).
+          tryFill(opts.entryTypeSelect, fields.entryType, 'income/outgoing guessed, check it’s right', bits, opts.entryTypeOverridable);
         }
         if (opts.yearSelect) {
           var yearVal = findYearOption(opts.yearSelect, fields.year);
           if (yearVal) tryFill(opts.yearSelect, yearVal, 'year auto-filled, check it’s right', bits);
         }
         if (status) status.textContent = bits.join(' — ');
+        // For a caller that needs to react to a field this scan just set —
+        // property.js/person.js use this to re-run their Income/Outgoing ->
+        // expense-category visibility toggle, since a plain .value = ...
+        // assignment above never fires a 'change' event on its own.
+        if (opts.onScanned) opts.onScanned(fields);
       }).catch(function () {
         if (status) status.textContent = file.name + ' — could not read it automatically, fill in the fields by hand.';
       });

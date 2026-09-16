@@ -364,7 +364,19 @@
         if (!categoryFieldWrap) return;
         categoryFieldWrap.hidden = entryTypeSelect.value !== 'Outgoing';
       }
-      if (entryTypeSelect) entryTypeSelect.addEventListener('change', syncCategoryVisibility);
+
+      // Tracks whether the current Income/Outgoing value is one the person
+      // actually chose from the dropdown, as opposed to a guess (typed or
+      // scanned) — only a real dropdown selection fires 'change' here,
+      // since every guess below sets .value directly. Once true, no guess
+      // is ever allowed to overwrite it again.
+      var entryTypeManuallySet = false;
+      if (entryTypeSelect) {
+        entryTypeSelect.addEventListener('change', function () {
+          entryTypeManuallySet = true;
+          syncCategoryVisibility();
+        });
+      }
       syncCategoryVisibility();
 
       if (nameInput && entryTypeSelect) {
@@ -384,6 +396,11 @@
         dateInput: dateInput,
         amountInput: form.querySelector('input[name="amount"]'),
         entryTypeSelect: entryTypeSelect,
+        // The document itself is a better source than a guess typed from
+        // the description alone, so a scan result is allowed to override
+        // that earlier guess — just never a choice the person made by hand.
+        entryTypeOverridable: function () { return !entryTypeManuallySet; },
+        onScanned: syncCategoryVisibility,
         categorySelect: categorySelect,
         yearSelect: yearSelect
       });
