@@ -272,7 +272,7 @@
         hideAllSteps();
         if (enrollWrap) enrollWrap.hidden = false;
         if (enrollFoot) enrollFoot.hidden = false;
-        if (enrollCard) enrollCard.innerHTML = '<p>Setting up…</p>';
+        if (enrollCard) enrollCard.innerHTML = '<p>Setting up&hellip;</p>';
         // Clear out any abandoned, never-confirmed enrollment first —
         // Supabase only allows one unverified TOTP factor (and one of a
         // given friendly name) on an account at a time, so a setup
@@ -782,7 +782,7 @@
 
     function uploadFormHtml(entityId) {
       var currentYear = new Date().getFullYear();
-      var yearOptions = '<option value="">Not labelled</option>';
+      var yearOptions = '<option value="" disabled selected>Choose a year&hellip;</option>';
       for (var y = currentYear + 1; y >= currentYear - 8; y--) {
         yearOptions += '<option value="' + y + '">' + y + '</option>';
       }
@@ -793,9 +793,10 @@
             '<div><label>Category (optional)</label><input type="text" name="category" placeholder="e.g. Filed 14 July 2026"></div>' +
           '</div>' +
           '<div class="form-grid-2">' +
-            '<div><label>Year (optional)</label><select name="year">' + yearOptions + '</select></div>' +
+            '<div><label>Year</label><select name="year" required>' + yearOptions + '</select></div>' +
             '<div><label>Valid until (optional)</label><input type="date" name="valid_until"></div>' +
           '</div>' +
+          window.HouseagoDocScan.categoryFieldHtml() +
           window.HouseagoDocScan.captureFieldHtml({ label: 'File' }) +
           '<button type="submit" class="btn btn-primary">Upload document</button>' +
           '<p class="form-status" role="status"></p>' +
@@ -806,6 +807,7 @@
     function renderDocRow(doc, entityId, uploadableIds, entityIds, session) {
       var metaBits = [];
       if (doc.category) metaBits.push(doc.category);
+      if (doc.expense_category) metaBits.push(doc.expense_category);
       if (doc.year) metaBits.push(doc.year);
       if (doc.valid_until) metaBits.push('Valid until ' + doc.valid_until);
 
@@ -1016,16 +1018,21 @@
       if (!form) return;
 
       var capture = window.HouseagoDocScan.wireCaptureField(form, {
-        dateInput: form.querySelector('input[name="valid_until"]')
+        dateInput: form.querySelector('input[name="valid_until"]'),
+        nameInput: form.querySelector('input[name="name"]'),
+        categorySelect: form.querySelector('select[name="expense_category"]'),
+        yearSelect: form.querySelector('select[name="year"]')
       });
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
         var file = capture.getFile();
         if (!file) { form.querySelector('.form-status').textContent = 'Please take a photo or choose a file first.'; return; }
 
         var name = form.querySelector('input[name="name"]').value.trim();
         var category = form.querySelector('input[name="category"]').value.trim();
+        var expenseCategory = form.querySelector('select[name="expense_category"]').value || null;
         var year = form.querySelector('select[name="year"]').value;
         var validUntil = form.querySelector('input[name="valid_until"]').value;
         var status = form.querySelector('.form-status');
@@ -1053,6 +1060,7 @@
               entity_id: entityId,
               name: name,
               category: category || null,
+              expense_category: expenseCategory,
               year: year || null,
               valid_until: validUntil || null,
               file_path: path,

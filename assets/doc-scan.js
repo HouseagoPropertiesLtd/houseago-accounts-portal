@@ -156,6 +156,124 @@
     return best ? best.value : null;
   }
 
+  // ---- Year extraction ----------------------------------------------------
+  // Prefers whatever year the date scan already found (the common case);
+  // otherwise looks for a standalone year, favouring one that sits near a
+  // label like "tax year" or "year ended" over the first 4-digit number on
+  // the page.
+  var YEAR_KEYWORDS = /(tax year|year ended|year ending|financial year|accounting period|period ended|period ending)/ig;
+  var YEAR_PATTERN = /\b(20\d{2})\b/g;
+
+  function parseYearFromText(text) {
+    if (!text) return null;
+    var candidates = [];
+    var re = new RegExp(YEAR_PATTERN.source, YEAR_PATTERN.flags);
+    var m;
+    var maxYear = new Date().getFullYear() + 1;
+    while ((m = re.exec(text))) {
+      var y = parseInt(m[1], 10);
+      if (y >= 2000 && y <= maxYear) candidates.push({ index: m.index, year: y });
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+    var best = pickBestCandidate(candidates, text, YEAR_KEYWORDS);
+    return best ? String(best.year) : null;
+  }
+
+  // ---- Expense categories & document-type guessing -------------------------
+  // A fixed pick-list rather than free text, kept short and roughly matching
+  // how a UK property tax return groups expenses — shared by every upload
+  // point on the site so "Repairs & maintenance" means the same thing
+  // wherever it's picked.
+  var EXPENSE_CATEGORIES = [
+    'Repairs & maintenance',
+    'Insurance',
+    'Letting & management fees',
+    'Legal & professional fees',
+    'Ground rent & service charges',
+    'Mortgage / loan interest',
+    'Utilities',
+    'Cleaning & gardening',
+    'Other'
+  ];
+
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  }
+
+  function categoryOptionsHtml(placeholder) {
+    return '<option value="">' + escapeAttr(placeholder || 'Uncategorised') + '</option>' +
+      EXPENSE_CATEGORIES.map(function (c) { return '<option value="' + escapeAttr(c) + '">' + escapeAttr(c) + '</option>'; }).join('');
+  }
+
+  // categoryFieldHtml(opts) -> a ready-to-insert "Expense category" field,
+  // for forms that don't build their own <select>.
+  function categoryFieldHtml(opts) {
+    opts = opts || {};
+    var label = opts.label || 'Expense category (optional)';
+    return '<div><label>' + escapeAttr(label) + '</label><select name="expense_category" data-scan-category>' + categoryOptionsHtml() + '</select></div>';
+  }
+
+  function populateCategorySelect(selectEl, opts) {
+    if (!selectEl) return;
+    opts = opts || {};
+    selectEl.innerHTML = categoryOptionsHtml(opts.placeholder);
+  }
+
+  // Keyword -> best-guess document title + expense category, checked in
+  // order so a more specific match (e.g. "gas safety") wins over a vaguer
+  // one further down the list. Every guess here is only ever a starting
+  // point — shown for a person to check, edit, or clear, exactly like the
+  // date/amount guesses above; nothing is ever assumed to be right.
+  var DOC_TYPE_RULES = [
+    { re: /garden|landscap|lawn|hedge/i, title: 'Garden Maintenance', category: 'Cleaning & gardening' },
+    { re: /clean(?:er|ing)?/i, title: 'Cleaning', category: 'Cleaning & gardening' },
+    { re: /letting agent|estate agent|managing agent|property management|management fee/i, title: 'Estate Agent Management', category: 'Letting & management fees' },
+    { re: /gas safety|landlord'?s? gas|\bcp ?12\b/i, title: 'Gas Safety Certificate', category: 'Repairs & maintenance' },
+    { re: /\beicr\b|electrical installation condition/i, title: 'EICR', category: 'Repairs & maintenance' },
+    { re: /\bepc\b|energy performance certificate/i, title: 'EPC', category: 'Repairs & maintenance' },
+    { re: /legionella/i, title: 'Legionella Risk Assessment', category: 'Repairs & maintenance' },
+    { re: /deposit protection|tenancy deposit/i, title: 'Deposit Protection', category: 'Letting & management fees' },
+    { re: /inventory (?:report|check-?in|check-?out)/i, title: 'Inventory Report', category: 'Letting & management fees' },
+    { re: /boiler|plumb(?:er|ing)|heating engineer|gas engineer/i, title: 'Plumbing & Heating', category: 'Repairs & maintenance' },
+    { re: /electrician|electrical repair/i, title: 'Electrical Repairs', category: 'Repairs & maintenance' },
+    { re: /roofer|roofing/i, title: 'Roofing', category: 'Repairs & maintenance' },
+    { re: /locksmith/i, title: 'Locksmith', category: 'Repairs & maintenance' },
+    { re: /pest control/i, title: 'Pest Control', category: 'Repairs & maintenance' },
+    { re: /insurance/i, title: 'Insurance', category: 'Insurance' },
+    { re: /mortgage|loan interest/i, title: 'Mortgage Statement', category: 'Mortgage / loan interest' },
+    { re: /solicitor|conveyanc|legal fee/i, title: 'Legal Fees', category: 'Legal & professional fees' },
+    { re: /accountant|bookkeep/i, title: 'Accountancy Fees', category: 'Legal & professional fees' },
+    { re: /ground rent/i, title: 'Ground Rent', category: 'Ground rent & service charges' },
+    { re: /service charge/i, title: 'Service Charge', category: 'Ground rent & service charges' },
+    { re: /council tax/i, title: 'Council Tax', category: 'Utilities' },
+    { re: /water (?:bill|rates|board)/i, title: 'Water Bill', category: 'Utilities' },
+    { re: /electricity bill|energy bill|gas bill/i, title: 'Utility Bill', category: 'Utilities' },
+    { re: /broadband|internet (?:bill|provider)/i, title: 'Broadband', category: 'Utilities' }
+  ];
+
+  function guessDocType(text) {
+    if (!text) return null;
+    for (var i = 0; i < DOC_TYPE_RULES.length; i++) {
+      if (DOC_TYPE_RULES[i].re.test(text)) return { title: DOC_TYPE_RULES[i].title, category: DOC_TYPE_RULES[i].category };
+    }
+    return null;
+  }
+
+  // ---- Income vs outgoing guessing (the ledger on a property/person's own
+  // "Income & Outgoings" section) -------------------------------------------
+  // A hand-typed ledger entry, or one with a receipt attached, can be
+  // either money coming in (rent) or money going out (a gardener, an
+  // insurance renewal) — this is only ever a starting guess for the
+  // "Income or outgoing" field, always left changeable.
+  var INCOME_TYPE_KEYWORDS = /\brent\b|rental income|tenant payment|deposit received/i;
+
+  function guessEntryType(text) {
+    if (!text) return null;
+    if (INCOME_TYPE_KEYWORDS.test(text)) return 'Income';
+    if (guessDocType(text)) return 'Outgoing';
+    return null;
+  }
+
   function ocrText(imageSource) {
     if (typeof Tesseract === 'undefined') return Promise.resolve('');
     return Tesseract.recognize(imageSource, 'eng')
@@ -229,12 +347,24 @@
     return Promise.resolve('');
   }
 
-  // Reads whichever fields it can off a file in one pass of text: a date
-  // and an amount, mined from the same extracted text.
+  // Reads whichever fields it can off a file in one pass of text: a date,
+  // an amount, a guessed document title + expense category, and a year
+  // (preferring the date's own year, falling back to one found in the
+  // text) — all mined from the same extracted text.
   function scanFileForFields(file) {
     return extractTextFromFile(file).then(function (text) {
-      return { date: parseDateFromText(text), amount: parseAmountFromText(text), text: text };
-    }).catch(function () { return { date: null, amount: null, text: '' }; });
+      var date = parseDateFromText(text);
+      var docType = guessDocType(text);
+      return {
+        date: date,
+        amount: parseAmountFromText(text),
+        year: date ? date.slice(0, 4) : parseYearFromText(text),
+        title: docType ? docType.title : null,
+        category: docType ? docType.category : null,
+        entryType: guessEntryType(text),
+        text: text
+      };
+    }).catch(function () { return { date: null, amount: null, year: null, title: null, category: null, entryType: null, text: '' }; });
   }
 
   // ---- Bank-statement rent scan (property/person Income sections) -------
@@ -288,6 +418,7 @@
         '<div class="capture-row">' +
           '<button type="button" class="btn btn-outline" data-scan-capture-btn>Take a photo</button>' +
           '<button type="button" class="btn btn-outline" data-scan-choose-btn>Choose a file</button>' +
+          '<button type="button" class="btn-text" data-scan-clear-btn hidden>Clear</button>' +
         '</div>' +
         '<input type="file" data-scan-camera accept="image/*" capture="environment" hidden>' +
         '<input type="file" data-scan-picker accept="' + accept + '" hidden>' +
@@ -296,32 +427,72 @@
     );
   }
 
-  // wireCaptureField(form, { dateInput, amountInput }) -> { getFile, reset }
+  // Finds the option on a year <select> matching a plain "YYYY" guess —
+  // either exactly, or as the start of a tax-year label like "2025/26".
+  function findYearOption(selectEl, year) {
+    if (!selectEl || !year) return null;
+    var opts = selectEl.options, i;
+    for (i = 0; i < opts.length; i++) if (opts[i].value === String(year)) return opts[i].value;
+    for (i = 0; i < opts.length; i++) if (opts[i].value.indexOf(String(year)) === 0) return opts[i].value;
+    return null;
+  }
+
+  function selectHasOption(selectEl, value) {
+    if (!selectEl || value == null) return false;
+    for (var i = 0; i < selectEl.options.length; i++) if (selectEl.options[i].value === String(value)) return true;
+    return false;
+  }
+
+  // wireCaptureField(form, { dateInput, amountInput, nameInput, categorySelect, yearSelect })
+  // -> { getFile, reset }
+  //
+  // Every field named here is filled in automatically from whatever the
+  // scan finds — but only while it's still empty, so nothing a person has
+  // already typed is ever overwritten. A "Clear" button appears once a
+  // file's picked, for the case where it turns out to be the wrong
+  // document: it drops the file and undoes exactly the fields this scan
+  // filled in, as long as they haven't since been changed by hand.
   function wireCaptureField(form, opts) {
     opts = opts || {};
     var cameraInput = form.querySelector('[data-scan-camera]');
     var pickerInput = form.querySelector('[data-scan-picker]');
     var captureBtn = form.querySelector('[data-scan-capture-btn]');
     var chooseBtn = form.querySelector('[data-scan-choose-btn]');
+    var clearBtn = form.querySelector('[data-scan-clear-btn]');
     var status = form.querySelector('[data-scan-status]');
     var currentFile = null;
+    var autofilled = [];
 
     if (captureBtn && cameraInput) captureBtn.addEventListener('click', function () { cameraInput.click(); });
     if (chooseBtn && pickerInput) chooseBtn.addEventListener('click', function () { pickerInput.click(); });
 
+    function tryFill(el, value, message, bits) {
+      if (!el || value == null || value === '' || el.value) return;
+      el.value = value;
+      autofilled.push({ el: el, value: String(value) });
+      bits.push(message);
+    }
+
     function handle(file) {
       if (!file) return;
       currentFile = file;
+      autofilled = [];
       if (status) status.textContent = file.name + ' — reading…';
+      if (clearBtn) clearBtn.hidden = false;
       scanFileForFields(file).then(function (fields) {
         var bits = [file.name];
-        if (opts.dateInput && fields.date && !opts.dateInput.value) {
-          opts.dateInput.value = fields.date;
-          bits.push('date auto-filled, check it’s right');
+        tryFill(opts.dateInput, fields.date, 'date auto-filled, check it’s right', bits);
+        tryFill(opts.amountInput, fields.amount, 'amount auto-filled, check it’s right', bits);
+        tryFill(opts.nameInput, fields.title, 'title guessed, check it’s right', bits);
+        if (opts.categorySelect && fields.category && selectHasOption(opts.categorySelect, fields.category)) {
+          tryFill(opts.categorySelect, fields.category, 'category guessed, check it’s right', bits);
         }
-        if (opts.amountInput && fields.amount != null && !opts.amountInput.value) {
-          opts.amountInput.value = fields.amount;
-          bits.push('amount auto-filled, check it’s right');
+        if (opts.entryTypeSelect && fields.entryType && selectHasOption(opts.entryTypeSelect, fields.entryType)) {
+          tryFill(opts.entryTypeSelect, fields.entryType, 'income/outgoing guessed, check it’s right', bits);
+        }
+        if (opts.yearSelect) {
+          var yearVal = findYearOption(opts.yearSelect, fields.year);
+          if (yearVal) tryFill(opts.yearSelect, yearVal, 'year auto-filled, check it’s right', bits);
         }
         if (status) status.textContent = bits.join(' — ');
       }).catch(function () {
@@ -332,14 +503,21 @@
     if (cameraInput) cameraInput.addEventListener('change', function () { handle(cameraInput.files[0]); });
     if (pickerInput) pickerInput.addEventListener('change', function () { handle(pickerInput.files[0]); });
 
+    function doReset() {
+      currentFile = null;
+      if (cameraInput) cameraInput.value = '';
+      if (pickerInput) pickerInput.value = '';
+      if (status) status.textContent = 'No file chosen yet.';
+      if (clearBtn) clearBtn.hidden = true;
+      autofilled.forEach(function (a) { if (String(a.el.value) === a.value) a.el.value = ''; });
+      autofilled = [];
+    }
+
+    if (clearBtn) clearBtn.addEventListener('click', doReset);
+
     return {
       getFile: function () { return currentFile; },
-      reset: function () {
-        currentFile = null;
-        if (cameraInput) cameraInput.value = '';
-        if (pickerInput) pickerInput.value = '';
-        if (status) status.textContent = 'No file chosen yet.';
-      }
+      reset: doReset
     };
   }
 
@@ -349,6 +527,11 @@
     extractLikelyIncomeLines: extractLikelyIncomeLines,
     parseLooseDate: parseLooseDate,
     captureFieldHtml: captureFieldHtml,
-    wireCaptureField: wireCaptureField
+    wireCaptureField: wireCaptureField,
+    EXPENSE_CATEGORIES: EXPENSE_CATEGORIES,
+    categoryFieldHtml: categoryFieldHtml,
+    populateCategorySelect: populateCategorySelect,
+    guessDocType: guessDocType,
+    guessEntryType: guessEntryType
   };
 })();

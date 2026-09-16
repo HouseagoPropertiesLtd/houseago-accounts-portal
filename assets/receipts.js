@@ -83,10 +83,10 @@
   // in assets/doc-scan.js, this just adapts its result to the
   // {date, amount} shape the capture flow below already expects.
   function scanFileForReceiptFields(fileOrBlob, isPdf, isImage) {
-    if (!fileOrBlob || (!isPdf && !isImage)) return Promise.resolve({ date: null, amount: null });
+    if (!fileOrBlob || (!isPdf && !isImage)) return Promise.resolve({ date: null, amount: null, title: null, category: null });
     return window.HouseagoDocScan.scanFileForFields(fileOrBlob)
-      .then(function (fields) { return { date: fields.date, amount: fields.amount }; })
-      .catch(function () { return { date: null, amount: null }; });
+      .then(function (fields) { return { date: fields.date, amount: fields.amount, title: fields.title, category: fields.category }; })
+      .catch(function () { return { date: null, amount: null, title: null, category: null }; });
   }
 
   // ---- Automatic crop: find roughly where the receipt is in a photo -----
@@ -212,22 +212,13 @@
   // A fixed pick-list rather than free text, kept short and roughly matching
   // how a UK property tax return groups expenses — good enough for a
   // running breakdown without turning submission into data entry.
-  var EXPENSE_CATEGORIES = [
-    'Repairs & maintenance',
-    'Insurance',
-    'Letting & management fees',
-    'Legal & professional fees',
-    'Ground rent & service charges',
-    'Mortgage / loan interest',
-    'Utilities',
-    'Cleaning & gardening',
-    'Other'
-  ];
+  // The category list itself now lives in assets/doc-scan.js, shared with
+  // every other upload point on the site — this just keeps the same name
+  // available here since the rest of this file already refers to it.
+  var EXPENSE_CATEGORIES = window.HouseagoDocScan.EXPENSE_CATEGORIES;
 
   function populateCategorySelect(selectEl) {
-    if (!selectEl) return;
-    selectEl.innerHTML = '<option value="">Uncategorised</option>' +
-      EXPENSE_CATEGORIES.map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join('');
+    window.HouseagoDocScan.populateCategorySelect(selectEl);
   }
 
   // ---- Expenses by month, within a financial year ------------------------
@@ -491,17 +482,29 @@
 
     var captureBtn = document.getElementById('receipt-capture-btn');
     var chooseBtn = document.getElementById('receipt-choose-btn');
+    var clearBtn = document.getElementById('receipt-clear-btn');
     var cameraInput = document.getElementById('receipt-file-camera');
     var pickerInput = document.getElementById('receipt-file-picker');
     var fileStatus = document.getElementById('receipt-file-status');
     var previewCard = document.getElementById('receipt-preview-card');
     var previewImg = document.getElementById('receipt-preview-img');
     var useCropCheckbox = document.getElementById('receipt-use-crop');
+    var nameInput = document.getElementById('receipt-name');
     var dateInput = document.getElementById('receipt-date');
     var dateStatus = document.getElementById('receipt-date-status');
     var amountInput = document.getElementById('receipt-amount');
     var amountStatus = document.getElementById('receipt-amount-status');
     var exportBtn = document.getElementById('receipts-export-btn');
+
+    // Fields the scan itself filled in, so "Clear" can undo exactly those —
+    // never something typed by hand — the same rule as every other upload
+    // point on the site (see assets/doc-scan.js).
+    var scanAutofilled = [];
+    function trackAutofill(el, value) { if (el) scanAutofilled.push({ el: el, value: String(value) }); }
+    function revertAutofills() {
+      scanAutofilled.forEach(function (a) { if (String(a.el.value) === a.value) a.el.value = ''; });
+      scanAutofilled = [];
+    }
 
     var latestReceiptDocs = [];
     var latestNamesById = {};
@@ -559,8 +562,10 @@
     function handleFileChosen(file) {
       if (!file) return;
       resetCaptureState();
+      revertAutofills();
       originalFile = file;
       originalUrl = URL.createObjectURL(file);
+      if (clearBtn) clearBtn.hidden = false;
 
       var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
       var isImage = /^image\//.test(file.type || '');
@@ -597,15 +602,25 @@
     function applyScanResult(fields) {
       if (fields.date) {
         dateInput.value = fields.date;
+        trackAutofill(dateInput, fields.date);
         dateStatus.textContent = 'Date detected automatically from the document. Please check it is correct.';
       } else {
         dateStatus.textContent = "Could not detect a date automatically — please enter it below.";
       }
       if (fields.amount != null) {
         amountInput.value = fields.amount.toFixed(2);
+        trackAutofill(amountInput, fields.amount.toFixed(2));
         amountStatus.textContent = 'Amount detected automatically. Please check it is correct.';
       } else {
         amountStatus.textContent = "Could not detect an amount automatically — please enter it if known.";
+      }
+      if (fields.title && nameInput && !nameInput.value) {
+        nameInput.value = fields.title;
+        trackAutofill(nameInput, fields.title);
+      }
+      if (fields.category && categorySelect && !categorySelect.value) {
+        var hasOption = Array.prototype.some.call(categorySelect.options, function (o) { return o.value === fields.category; });
+        if (hasOption) { categorySelect.value = fields.category; trackAutofill(categorySelect, fields.category); }
       }
     }
 
@@ -616,6 +631,18 @@
     if (chooseBtn && pickerInput) {
       chooseBtn.addEventListener('click', function () { pickerInput.click(); });
       pickerInput.addEventListener('change', function () { handleFileChosen(pickerInput.files[0]); });
+    }
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        resetCaptureState();
+        revertAutofills();
+        if (cameraInput) cameraInput.value = '';
+        if (pickerInput) pickerInput.value = '';
+        fileStatus.textContent = 'No file chosen yet.';
+        dateStatus.textContent = "Choose a file above and we'll try to read its date automatically.";
+        amountStatus.textContent = '';
+        clearBtn.hidden = true;
+      });
     }
 
     document.querySelectorAll('[data-portal-logout]').forEach(function (link) {
@@ -853,6 +880,7 @@
     function wireUploadForm(session) {
       form.addEventListener('submit', function (e) {
         e.preventDefault();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
         var upload = currentUploadFile();
         if (!upload) { fileStatus.textContent = 'Please take a photo or choose a file first.'; return; }
 
@@ -905,6 +933,8 @@
               status.textContent = 'Submitted.';
               form.reset();
               resetCaptureState();
+              scanAutofilled = [];
+              if (clearBtn) clearBtn.hidden = true;
               loadReceipts(true);
             });
           });

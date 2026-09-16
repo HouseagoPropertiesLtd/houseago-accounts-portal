@@ -410,7 +410,7 @@
 
     function uploadFormHtml(propertyId, uploadableDocSubs) {
       var currentYear = new Date().getFullYear();
-      var yearOptions = '<option value="">Not labelled</option>';
+      var yearOptions = '<option value="" disabled selected>Choose a year&hellip;</option>';
       for (var y = currentYear + 1; y >= currentYear - 8; y--) {
         yearOptions += '<option value="' + y + '">' + y + '</option>';
       }
@@ -440,9 +440,10 @@
           typeField +
           complianceField +
           '<div class="form-grid-2">' +
-            '<div><label>Year (optional)</label><select name="year">' + yearOptions + '</select></div>' +
+            '<div><label>Year</label><select name="year" required>' + yearOptions + '</select></div>' +
             '<div><label>Valid until (required for a tracked compliance certificate, optional otherwise)</label><input type="date" name="valid_until"></div>' +
           '</div>' +
+          window.HouseagoDocScan.categoryFieldHtml() +
           window.HouseagoDocScan.captureFieldHtml({ label: 'File' }) +
           '<button type="submit" class="btn btn-primary">Upload document</button>' +
           '<p class="form-status" role="status"></p>' +
@@ -455,7 +456,10 @@
       if (!form) return;
 
       var capture = window.HouseagoDocScan.wireCaptureField(form, {
-        dateInput: form.querySelector('input[name="valid_until"]')
+        dateInput: form.querySelector('input[name="valid_until"]'),
+        nameInput: form.querySelector('input[name="name"]'),
+        categorySelect: form.querySelector('select[name="expense_category"]'),
+        yearSelect: form.querySelector('select[name="year"]')
       });
 
       var typeSelect = form.querySelector('[data-doc-type]');
@@ -470,6 +474,7 @@
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
         var file = capture.getFile();
         if (!file) { form.querySelector('.form-status').textContent = 'Please take a photo or choose a file first.'; return; }
 
@@ -477,6 +482,7 @@
         var entityId = propertyId + suffix;
         var name = form.querySelector('input[name="name"]').value.trim();
         var category = form.querySelector('input[name="category"]').value.trim();
+        var expenseCategory = form.querySelector('select[name="expense_category"]').value || null;
         var year = form.querySelector('select[name="year"]').value;
         var validUntil = form.querySelector('input[name="valid_until"]').value;
         var complianceField = form.querySelector('select[name="compliance_type"]');
@@ -504,6 +510,7 @@
               entity_id: entityId,
               name: name,
               category: category || null,
+              expense_category: expenseCategory,
               year: year || null,
               valid_until: validUntil || null,
               compliance_type: complianceType,
@@ -553,7 +560,7 @@
 
     function nestedComplianceUploadFormHtml(entityId) {
       var currentYear = new Date().getFullYear();
-      var yearOptions = '<option value="">Not labelled</option>';
+      var yearOptions = '<option value="" disabled selected>Choose a year&hellip;</option>';
       for (var y = currentYear + 1; y >= currentYear - 8; y--) {
         yearOptions += '<option value="' + y + '">' + y + '</option>';
       }
@@ -568,7 +575,7 @@
             COMPLIANCE_TYPES.map(function (t) { return '<option value="' + t.id + '">' + escapeHtml(t.label) + '</option>'; }).join('') +
           '</select></div>' +
           '<div class="form-grid-2">' +
-            '<div><label>Year (optional)</label><select name="year">' + yearOptions + '</select></div>' +
+            '<div><label>Year</label><select name="year" required>' + yearOptions + '</select></div>' +
             '<div><label>Valid until (required for a tracked compliance certificate, optional otherwise)</label><input type="date" name="valid_until"></div>' +
           '</div>' +
           window.HouseagoDocScan.captureFieldHtml({ label: 'File' }) +
@@ -581,17 +588,23 @@
     // reloadPropertyId is the page actually being viewed (e.g. 'ltd-company')
     // — never derived from entityId, since a nested entity's own id (e.g.
     // '3-horning-close-compliance-tenancy') belongs to a different property
-    // than the page it's nested inside.
+    // than the page it's nested inside. No expense-category field here,
+    // deliberately — this form is compliance-only, so scanning it only ever
+    // guesses a document name (e.g. "Gas Safety Certificate") and a year,
+    // never anything finance-related.
     function wireNestedComplianceUploadForm(entityId, session, reloadPropertyId) {
       var form = sectionsEl.querySelector('[data-upload-entity="' + entityId + '"]');
       if (!form) return;
 
       var capture = window.HouseagoDocScan.wireCaptureField(form, {
-        dateInput: form.querySelector('input[name="valid_until"]')
+        dateInput: form.querySelector('input[name="valid_until"]'),
+        nameInput: form.querySelector('input[name="name"]'),
+        yearSelect: form.querySelector('select[name="year"]')
       });
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
         var file = capture.getFile();
         if (!file) { form.querySelector('.form-status').textContent = 'Please take a photo or choose a file first.'; return; }
 
@@ -663,6 +676,8 @@
       if (showType) metaBits.push(docTypeLabel(entityId));
       if (doc.compliance_type) metaBits.push(complianceTypeLabel(doc.compliance_type) || doc.compliance_type);
       if (doc.category) metaBits.push(doc.category);
+      if (doc.expense_category) metaBits.push(doc.expense_category);
+      if (isIncome && doc.entry_type) metaBits.push(doc.entry_type);
       if (isIncome && doc.amount != null) metaBits.push('£' + Number(doc.amount).toFixed(2));
       if (isIncome && doc.doc_date) metaBits.push(formatDate(doc.doc_date));
       if (isIncome && doc.notes) metaBits.push(doc.notes);
@@ -808,7 +823,7 @@
       return (
         '<div class="entity-card">' +
           '<div class="section-head left"><h2>Income &amp; Outgoings</h2></div>' +
-          '<p>A running total of rent received and money spent on this property — not a place to file documents. Most entries here are just a description, an amount, and a date; nothing needs to be uploaded (outgoings come from whatever’s tagged to this property under Receipts &amp; Invoices instead).</p>' +
+          '<p>A running total of rent received and money spent on this property — not a place to file documents. Most entries here are just a description, an amount, a date, and whether it&rsquo;s income or an outgoing; nothing needs to be uploaded. Outgoings also include anything tagged to this property under Receipts &amp; Invoices.</p>' +
           '<div class="income-chart" data-income-chart="' + entityId + '"></div>' +
           '<div class="year-filter-row" data-year-filter="' + entityId + '" hidden>' +
             '<label for="year-select-' + entityId + '">Year</label>' +
@@ -822,22 +837,30 @@
 
     function incomeEntryFormHtml(entityId) {
       var currentYear = new Date().getFullYear();
-      var yearOptions = '<option value="">Not labelled</option>';
+      var yearOptions = '<option value="" disabled selected>Choose a year&hellip;</option>';
       for (var y = currentYear + 1; y >= currentYear - 8; y--) yearOptions += '<option value="' + y + '">' + y + '</option>';
       return (
         '<form class="form-card income-form" data-income-entity="' + entityId + '">' +
-          '<div class="section-subhead">Add an income entry by hand</div>' +
+          '<div class="section-subhead">Add an entry by hand</div>' +
           '<div class="form-grid-2">' +
             '<div><label>Description</label><input type="text" name="name" required placeholder="e.g. Rent - Flat 2, March 2026"></div>' +
             '<div><label>Amount (£)</label><input type="number" step="0.01" min="0" name="amount" required></div>' +
           '</div>' +
           '<div class="form-grid-2">' +
+            '<div><label>Income or outgoing</label><select name="entry_type" required>' +
+              '<option value="" disabled selected>Choose&hellip;</option>' +
+              '<option value="Income">Income</option>' +
+              '<option value="Outgoing">Outgoing</option>' +
+            '</select></div>' +
             '<div><label>Date</label><input type="date" name="doc_date"></div>' +
-            '<div><label>Year (optional)</label><select name="year">' + yearOptions + '</select></div>' +
+          '</div>' +
+          '<div class="form-grid-2">' +
+            '<div><label>Year</label><select name="year" required>' + yearOptions + '</select></div>' +
+            '<div data-outgoing-category-field hidden>' + window.HouseagoDocScan.categoryFieldHtml() + '</div>' +
           '</div>' +
           '<div><label>Notes (optional)</label><textarea name="notes" rows="2" placeholder="Anything else worth noting about this entry"></textarea></div>' +
           window.HouseagoDocScan.captureFieldHtml({ label: 'Receipt or supporting document (optional)' }) +
-          '<button type="submit" class="btn btn-primary">Add income entry</button>' +
+          '<button type="submit" class="btn btn-primary">Add entry</button>' +
           '<p class="form-status" role="status"></p>' +
         '</form>'
       );
@@ -846,23 +869,61 @@
     // A receipt attached here is optional — most entries are still just a
     // typed description, amount, and date — but if one is attached it's
     // scanned the same way as everywhere else on the site (see doc-scan.js)
-    // to try to fill in the amount and date automatically; either stays
-    // fully editable, since the scan is only ever a first guess.
+    // to try to fill in the amount, date, and whether it looks like income
+    // or an outgoing automatically; everything stays fully editable, since
+    // every guess here is only ever a first pass. The description itself is
+    // also read live as it's typed ("Gardener" -> Outgoing, "Rent" ->
+    // Income), so most hand-typed entries with no receipt still get a
+    // sensible guess — again, only ever a suggestion, never locked in.
     function wireIncomeEntryForm(entityId, session, propertyId) {
       var form = sectionsEl.querySelector('[data-income-entity="' + entityId + '"]');
       if (!form) return;
 
+      var nameInput = form.querySelector('input[name="name"]');
+      var entryTypeSelect = form.querySelector('select[name="entry_type"]');
+      var dateInput = form.querySelector('input[name="doc_date"]');
+      var yearSelect = form.querySelector('select[name="year"]');
+      var categoryFieldWrap = form.querySelector('[data-outgoing-category-field]');
+      var categorySelect = form.querySelector('select[name="expense_category"]');
+
+      function syncCategoryVisibility() {
+        if (!categoryFieldWrap) return;
+        categoryFieldWrap.hidden = entryTypeSelect.value !== 'Outgoing';
+      }
+      if (entryTypeSelect) entryTypeSelect.addEventListener('change', syncCategoryVisibility);
+      syncCategoryVisibility();
+
+      if (nameInput && entryTypeSelect) {
+        nameInput.addEventListener('input', function () {
+          if (entryTypeSelect.value) return;
+          var guess = window.HouseagoDocScan.guessEntryType(nameInput.value);
+          if (guess) { entryTypeSelect.value = guess; syncCategoryVisibility(); }
+        });
+      }
+      if (dateInput && yearSelect) {
+        dateInput.addEventListener('change', function () {
+          if (!yearSelect.value && dateInput.value) yearSelect.value = dateInput.value.slice(0, 4);
+        });
+      }
+
       var capture = window.HouseagoDocScan.wireCaptureField(form, {
-        dateInput: form.querySelector('input[name="doc_date"]'),
-        amountInput: form.querySelector('input[name="amount"]')
+        dateInput: dateInput,
+        amountInput: form.querySelector('input[name="amount"]'),
+        entryTypeSelect: entryTypeSelect,
+        categorySelect: categorySelect,
+        yearSelect: yearSelect
       });
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
-        var name = form.querySelector('input[name="name"]').value.trim();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
+        syncCategoryVisibility();
+        var name = nameInput.value.trim();
         var amount = parseFloat(form.querySelector('input[name="amount"]').value);
-        var docDate = form.querySelector('input[name="doc_date"]').value;
-        var year = form.querySelector('select[name="year"]').value;
+        var entryType = entryTypeSelect.value;
+        var docDate = dateInput.value;
+        var year = yearSelect.value;
+        var expenseCategory = (entryType === 'Outgoing' && categorySelect) ? (categorySelect.value || null) : null;
         var notes = form.querySelector('textarea[name="notes"]').value.trim();
         var status = form.querySelector('.form-status');
         var submitBtn = form.querySelector('button[type="submit"]');
@@ -873,17 +934,20 @@
             entity_id: entityId,
             name: name,
             amount: amount,
+            entry_type: entryType,
+            expense_category: expenseCategory,
             doc_date: docDate || null,
             year: year || null,
             notes: notes || null,
             file_path: filePath || null,
             uploaded_by: session.user.id
           }).then(function (insertResult) {
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add income entry'; }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add entry'; }
             if (insertResult.error) { status.textContent = 'Could not add that entry. Please try again.'; return; }
             status.textContent = 'Added.';
             form.reset();
             capture.reset();
+            syncCategoryVisibility();
             loadProperty(propertyId, session);
           });
         }
@@ -899,7 +963,7 @@
           var path = entityId + '/' + Date.now() + '-' + safeFileName;
           client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
             if (uploadResult.error) {
-              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add income entry'; }
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add entry'; }
               status.textContent = 'Could not upload that file. Please try again.';
               return;
             }
@@ -970,11 +1034,14 @@
               if (!desc || isNaN(amount)) return;
               btn.disabled = true;
               btn.textContent = 'Adding…';
+              var parsedDate = window.HouseagoDocScan.parseLooseDate(dateStr);
               client.from('entity_documents').insert({
                 entity_id: entityId,
                 name: desc,
                 amount: amount,
-                doc_date: window.HouseagoDocScan.parseLooseDate(dateStr),
+                entry_type: 'Income',
+                doc_date: parsedDate,
+                year: parsedDate ? parsedDate.slice(0, 4) : String(new Date().getFullYear()),
                 file_path: null,
                 uploaded_by: session.user.id
               }).then(function (insertResult) {
@@ -1001,11 +1068,18 @@
       var chartEl = sectionsEl.querySelector('[data-income-chart="' + entityId + '"]');
       if (!chartEl) return;
       Promise.all([
-        client.from('entity_documents').select('amount, doc_date, year').eq('entity_id', entityId),
+        client.from('entity_documents').select('amount, doc_date, year, entry_type').eq('entity_id', entityId),
         client.from('entity_documents').select('amount, doc_date, year').in('entity_id', RECEIPTS_ENTITY_IDS).eq('related_entity_id', propertyId)
       ]).then(function (results) {
-        var income = (results[0].data || []).filter(function (d) { return d.amount != null; });
-        var outgoing = (results[1].data || []).filter(function (d) { return d.amount != null; });
+        // Every hand-typed/scanned ledger entry is labelled Income or
+        // Outgoing (entry_type); an older row with nothing set is treated
+        // as Income, matching how this ledger worked before that label
+        // existed. Receipts & Invoices linked to this property are always
+        // outgoings, same as before.
+        var ownRows = (results[0].data || []).filter(function (d) { return d.amount != null; });
+        var income = ownRows.filter(function (d) { return d.entry_type !== 'Outgoing'; });
+        var outgoing = ownRows.filter(function (d) { return d.entry_type === 'Outgoing'; })
+          .concat((results[1].data || []).filter(function (d) { return d.amount != null; }));
 
         function yearOf(d) { return d.year || (d.doc_date ? d.doc_date.slice(0, 4) : null); }
         var years = {};

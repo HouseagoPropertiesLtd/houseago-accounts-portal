@@ -192,6 +192,14 @@ create table if not exists public.entity_documents (
   -- or Houseago Properties Ltd's general overheads, not tied to any one
   -- property (accountancy fees, software, and the like).
   expense_type text,
+  -- entry_type is 'Income' or 'Outgoing', set only on rows in a property or
+  -- person's own "...-income" section (the hand-typed/scanned Income &
+  -- Outgoings ledger) — distinguishes rent received from money spent that
+  -- was logged directly on the ledger rather than through Receipts &
+  -- Invoices, so the running totals split correctly. An older row with
+  -- nothing set here is treated as Income, matching how the ledger worked
+  -- before this column existed. Unused outside "...-income" sections.
+  entry_type text,
   -- compliance_type is set only on documents uploaded into a "...
   -- -compliance-tenancy" section, and only when the document IS one of the
   -- fixed certificate/assessment types the Compliance status panel tracks
@@ -210,9 +218,10 @@ create table if not exists public.entity_documents (
 );
 
 -- If this table already existed before year/doc_date/notes/related_entity_id/
--- amount/expense_category/expense_type/compliance_type were added, these
--- bring an existing database up to date (harmless to re-run — a fresh
--- project just skips them since the columns above already created them).
+-- amount/expense_category/expense_type/entry_type/compliance_type were
+-- added, these bring an existing database up to date (harmless to re-run —
+-- a fresh project just skips them since the columns above already created
+-- them).
 alter table public.entity_documents add column if not exists year text;
 alter table public.entity_documents add column if not exists doc_date date;
 alter table public.entity_documents add column if not exists notes text;
@@ -220,7 +229,23 @@ alter table public.entity_documents add column if not exists related_entity_id t
 alter table public.entity_documents add column if not exists amount numeric(10, 2);
 alter table public.entity_documents add column if not exists expense_category text;
 alter table public.entity_documents add column if not exists expense_type text;
+alter table public.entity_documents add column if not exists entry_type text;
 alter table public.entity_documents add column if not exists compliance_type text;
+
+-- One-off backfill: existing "...-income" ledger rows predate entry_type
+-- and would otherwise all read as Income (including hand-typed expenses
+-- like a gardener or an insurance renewal). This guesses Outgoing for any
+-- row whose name matches a common expense keyword, leaving everything else
+-- (rent, etc.) as Income — the same starting guess the scan itself makes
+-- for a new entry, and just as editable afterwards from the property or
+-- person's own page. Safe to re-run: only touches rows still null.
+update public.entity_documents
+set entry_type = case
+  when name ~* 'garden|landscap|lawn|hedge|clean|letting agent|estate agent|managing agent|management fee|gas safety|eicr|epc|legionella|deposit protection|tenancy deposit|inventory|boiler|plumb|heating engineer|gas engineer|electrician|electrical repair|roofer|roofing|locksmith|pest control|insurance|mortgage|loan interest|solicitor|conveyanc|legal fee|accountant|bookkeep|ground rent|service charge|council tax|water (bill|rates|board)|electricity bill|energy bill|gas bill|broadband|internet (bill|provider)'
+    then 'Outgoing'
+  else 'Income'
+end
+where entity_id like '%-income' and entry_type is null;
 -- Only needed if this table was created before file_path became nullable
 -- (a fresh run of the create table above already has it right):
 alter table public.entity_documents alter column file_path drop not null;
@@ -253,7 +278,7 @@ create policy "Access holders read entity documents"
 -- just visibility — closes both without stopping anyone from linking a
 -- receipt to any property they can actually see.
 -- uploaded_by must either be left blank or match whoever is actually
--- signed in -- without this, anyone with upload rights to any one section
+-- signed in — without this, anyone with upload rights to any one section
 -- could set uploaded_by to someone else's account ID on their own upload,
 -- forging who submitted it. auth.js always sends session.user.id (or
 -- omits the field), so this never affects a normal upload through the site.
@@ -454,7 +479,7 @@ create policy "Require completed 2FA once enrolled"
 -- above the entities insert — so neither Oscar's nor Sally's row here
 -- grants its old insurance/income sections; add
 -- ('SALLY_USER_ID', '3-horning-close-compliance-tenancy', true) below too
--- if Sally should also see that property's compliance paperwork.
+-- if Sally should also see that property's compliance paperwork.)
 -- insert into public.portal_access (user_id, entity_id, can_upload) values
 --   ('SALLY_USER_ID', 'sally-sole-trader', true),
 --   ('SALLY_USER_ID', 'sally-bank-statements', true),

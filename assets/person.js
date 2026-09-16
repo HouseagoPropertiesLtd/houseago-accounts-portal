@@ -80,7 +80,7 @@
 
   function taxYearOptionsHtml() {
     var startYear = currentTaxYearStart();
-    var html = '<option value="">Not labelled</option>';
+    var html = '<option value="" disabled selected>Choose a tax year&hellip;</option>';
     for (var y = startYear + 1; y >= startYear - 7; y--) {
       var label = y + '/' + pad2((y + 1) % 100);
       html += '<option value="' + escapeHtml(label) + '">' + escapeHtml(label) + '</option>';
@@ -289,7 +289,7 @@
         html +=
           '<div class="entity-card">' +
             '<div class="section-head left"><h2>' + escapeHtml(name) + ' &mdash; Income &amp; Outgoings</h2></div>' +
-            '<p>A running total of rent received and money spent on this property — not a place to file documents. Most entries here are just a description, an amount, and a date.</p>' +
+            '<p>A running total of rent received and money spent on this property — not a place to file documents. Most entries here are just a description, an amount, a date, and whether it&rsquo;s income or an outgoing.</p>' +
             '<div class="income-chart" data-income-chart="' + incomeId + '"></div>' +
             '<div class="year-filter-row" data-year-filter="' + incomeId + '" hidden>' +
               '<label for="year-select-' + incomeId + '">Year</label>' +
@@ -318,22 +318,30 @@
 
     function incomeEntryFormHtml(entityId) {
       var currentYear = new Date().getFullYear();
-      var yearOptions = '<option value="">Not labelled</option>';
+      var yearOptions = '<option value="" disabled selected>Choose a year&hellip;</option>';
       for (var y = currentYear + 1; y >= currentYear - 8; y--) yearOptions += '<option value="' + y + '">' + y + '</option>';
       return (
         '<form class="form-card income-form" data-income-entity="' + entityId + '">' +
-          '<div class="section-subhead">Add an income entry by hand</div>' +
+          '<div class="section-subhead">Add an entry by hand</div>' +
           '<div class="form-grid-2">' +
             '<div><label>Description</label><input type="text" name="name" required placeholder="e.g. Rent - Flat 2, March 2026"></div>' +
             '<div><label>Amount (£)</label><input type="number" step="0.01" min="0" name="amount" required></div>' +
           '</div>' +
           '<div class="form-grid-2">' +
+            '<div><label>Income or outgoing</label><select name="entry_type" required>' +
+              '<option value="" disabled selected>Choose&hellip;</option>' +
+              '<option value="Income">Income</option>' +
+              '<option value="Outgoing">Outgoing</option>' +
+            '</select></div>' +
             '<div><label>Date</label><input type="date" name="doc_date"></div>' +
-            '<div><label>Year (optional)</label><select name="year">' + yearOptions + '</select></div>' +
+          '</div>' +
+          '<div class="form-grid-2">' +
+            '<div><label>Year</label><select name="year" required>' + yearOptions + '</select></div>' +
+            '<div data-outgoing-category-field hidden>' + window.HouseagoDocScan.categoryFieldHtml() + '</div>' +
           '</div>' +
           '<div><label>Notes (optional)</label><textarea name="notes" rows="2" placeholder="Anything else worth noting about this entry"></textarea></div>' +
           window.HouseagoDocScan.captureFieldHtml({ label: 'Receipt or supporting document (optional)' }) +
-          '<button type="submit" class="btn btn-primary">Add income entry</button>' +
+          '<button type="submit" class="btn btn-primary">Add entry</button>' +
           '<p class="form-status" role="status"></p>' +
         '</form>'
       );
@@ -345,17 +353,51 @@
       var form = sectionsEl.querySelector('[data-income-entity="' + entityId + '"]');
       if (!form) return;
 
+      var nameInput = form.querySelector('input[name="name"]');
+      var entryTypeSelect = form.querySelector('select[name="entry_type"]');
+      var dateInput = form.querySelector('input[name="doc_date"]');
+      var yearSelect = form.querySelector('select[name="year"]');
+      var categoryFieldWrap = form.querySelector('[data-outgoing-category-field]');
+      var categorySelect = form.querySelector('select[name="expense_category"]');
+
+      function syncCategoryVisibility() {
+        if (!categoryFieldWrap) return;
+        categoryFieldWrap.hidden = entryTypeSelect.value !== 'Outgoing';
+      }
+      if (entryTypeSelect) entryTypeSelect.addEventListener('change', syncCategoryVisibility);
+      syncCategoryVisibility();
+
+      if (nameInput && entryTypeSelect) {
+        nameInput.addEventListener('input', function () {
+          if (entryTypeSelect.value) return;
+          var guess = window.HouseagoDocScan.guessEntryType(nameInput.value);
+          if (guess) { entryTypeSelect.value = guess; syncCategoryVisibility(); }
+        });
+      }
+      if (dateInput && yearSelect) {
+        dateInput.addEventListener('change', function () {
+          if (!yearSelect.value && dateInput.value) yearSelect.value = dateInput.value.slice(0, 4);
+        });
+      }
+
       var capture = window.HouseagoDocScan.wireCaptureField(form, {
-        dateInput: form.querySelector('input[name="doc_date"]'),
-        amountInput: form.querySelector('input[name="amount"]')
+        dateInput: dateInput,
+        amountInput: form.querySelector('input[name="amount"]'),
+        entryTypeSelect: entryTypeSelect,
+        categorySelect: categorySelect,
+        yearSelect: yearSelect
       });
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
-        var name = form.querySelector('input[name="name"]').value.trim();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
+        syncCategoryVisibility();
+        var name = nameInput.value.trim();
         var amount = parseFloat(form.querySelector('input[name="amount"]').value);
-        var docDate = form.querySelector('input[name="doc_date"]').value;
-        var year = form.querySelector('select[name="year"]').value;
+        var entryType = entryTypeSelect.value;
+        var docDate = dateInput.value;
+        var year = yearSelect.value;
+        var expenseCategory = (entryType === 'Outgoing' && categorySelect) ? (categorySelect.value || null) : null;
         var notes = form.querySelector('textarea[name="notes"]').value.trim();
         var status = form.querySelector('.form-status');
         var submitBtn = form.querySelector('button[type="submit"]');
@@ -366,17 +408,20 @@
             entity_id: entityId,
             name: name,
             amount: amount,
+            entry_type: entryType,
+            expense_category: expenseCategory,
             doc_date: docDate || null,
             year: year || null,
             notes: notes || null,
             file_path: filePath || null,
             uploaded_by: session.user.id
           }).then(function (insertResult) {
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add income entry'; }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add entry'; }
             if (insertResult.error) { status.textContent = 'Could not add that entry. Please try again.'; return; }
             status.textContent = 'Added.';
             form.reset();
             capture.reset();
+            syncCategoryVisibility();
             loadPerson(person, session);
           });
         }
@@ -392,7 +437,7 @@
           var path = entityId + '/' + Date.now() + '-' + safeFileName;
           client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
             if (uploadResult.error) {
-              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add income entry'; }
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add entry'; }
               status.textContent = 'Could not upload that file. Please try again.';
               return;
             }
@@ -459,11 +504,14 @@
               if (!desc || isNaN(amount)) return;
               btn.disabled = true;
               btn.textContent = 'Adding…';
+              var parsedDate = window.HouseagoDocScan.parseLooseDate(dateStr);
               client.from('entity_documents').insert({
                 entity_id: entityId,
                 name: desc,
                 amount: amount,
-                doc_date: window.HouseagoDocScan.parseLooseDate(dateStr),
+                entry_type: 'Income',
+                doc_date: parsedDate,
+                year: parsedDate ? parsedDate.slice(0, 4) : String(new Date().getFullYear()),
                 file_path: null,
                 uploaded_by: session.user.id
               }).then(function (insertResult) {
@@ -483,11 +531,15 @@
       var chartEl = sectionsEl.querySelector('[data-income-chart="' + entityId + '"]');
       if (!chartEl) return;
       Promise.all([
-        client.from('entity_documents').select('amount, doc_date, year').eq('entity_id', entityId),
+        client.from('entity_documents').select('amount, doc_date, year, entry_type').eq('entity_id', entityId),
         client.from('entity_documents').select('amount, doc_date, year').in('entity_id', RECEIPTS_ENTITY_IDS).eq('related_entity_id', propertyId)
       ]).then(function (results) {
-        var income = (results[0].data || []).filter(function (d) { return d.amount != null; });
-        var outgoing = (results[1].data || []).filter(function (d) { return d.amount != null; });
+        // See the matching note in property.js's own copy of this chart —
+        // an older row with no entry_type set is treated as Income.
+        var ownRows = (results[0].data || []).filter(function (d) { return d.amount != null; });
+        var income = ownRows.filter(function (d) { return d.entry_type !== 'Outgoing'; });
+        var outgoing = ownRows.filter(function (d) { return d.entry_type === 'Outgoing'; })
+          .concat((results[1].data || []).filter(function (d) { return d.amount != null; }));
 
         function yearOf(d) { return d.year || (d.doc_date ? d.doc_date.slice(0, 4) : null); }
         var years = {};
@@ -607,7 +659,7 @@
 
     function uploadFormHtml(sub) {
       var yearOptions = sub.taxYear ? taxYearOptionsHtml() : plainYearOptionsHtml();
-      var yearLabel = sub.taxYear ? 'Tax year (optional)' : 'Year (optional)';
+      var yearLabel = sub.taxYear ? 'Tax year' : 'Year';
       var namePlaceholder = sub.taxYear ? 'e.g. Current account - March 2026' : 'e.g. Dividend voucher - Q2 2026';
       return (
         '<form class="form-card upload-form" data-upload-entity="' + sub.id + '">' +
@@ -616,9 +668,10 @@
             '<div><label>Category (optional)</label><input type="text" name="category" placeholder="e.g. Filed 14 July 2026"></div>' +
           '</div>' +
           '<div class="form-grid-2">' +
-            '<div><label>' + yearLabel + '</label><select name="year">' + yearOptions + '</select></div>' +
+            '<div><label>' + yearLabel + '</label><select name="year" required>' + yearOptions + '</select></div>' +
             '<div><label>Valid until (optional)</label><input type="date" name="valid_until"></div>' +
           '</div>' +
+          window.HouseagoDocScan.categoryFieldHtml() +
           window.HouseagoDocScan.captureFieldHtml({ label: 'File' }) +
           '<button type="submit" class="btn btn-primary">Upload document</button>' +
           '<p class="form-status" role="status"></p>' +
@@ -628,7 +681,7 @@
 
     function plainYearOptionsHtml() {
       var currentYear = new Date().getFullYear();
-      var html = '<option value="">Not labelled</option>';
+      var html = '<option value="" disabled selected>Choose a year&hellip;</option>';
       for (var y = currentYear + 1; y >= currentYear - 8; y--) html += '<option value="' + y + '">' + y + '</option>';
       return html;
     }
@@ -637,6 +690,8 @@
       var isIncome = /-income$/.test(entityId);
       var metaBits = [];
       if (doc.category) metaBits.push(doc.category);
+      if (doc.expense_category) metaBits.push(doc.expense_category);
+      if (isIncome && doc.entry_type) metaBits.push(doc.entry_type);
       if (isIncome && doc.amount != null) metaBits.push('£' + Number(doc.amount).toFixed(2));
       if (isIncome && doc.doc_date) metaBits.push(formatDate(doc.doc_date));
       if (isIncome && doc.notes) metaBits.push(doc.notes);
@@ -739,16 +794,21 @@
       if (!form) return;
 
       var capture = window.HouseagoDocScan.wireCaptureField(form, {
-        dateInput: form.querySelector('input[name="valid_until"]')
+        dateInput: form.querySelector('input[name="valid_until"]'),
+        nameInput: form.querySelector('input[name="name"]'),
+        categorySelect: form.querySelector('select[name="expense_category"]'),
+        yearSelect: form.querySelector('select[name="year"]')
       });
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
         var file = capture.getFile();
         if (!file) { form.querySelector('.form-status').textContent = 'Please take a photo or choose a file first.'; return; }
 
         var name = form.querySelector('input[name="name"]').value.trim();
         var category = form.querySelector('input[name="category"]').value.trim();
+        var expenseCategory = form.querySelector('select[name="expense_category"]').value || null;
         var year = form.querySelector('select[name="year"]').value;
         var validUntil = form.querySelector('input[name="valid_until"]').value;
         var status = form.querySelector('.form-status');
@@ -774,6 +834,7 @@
               entity_id: entityId,
               name: name,
               category: category || null,
+              expense_category: expenseCategory,
               year: year || null,
               valid_until: validUntil || null,
               file_path: path,
