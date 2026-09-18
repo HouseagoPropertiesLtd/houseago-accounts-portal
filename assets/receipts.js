@@ -600,17 +600,38 @@
       }
     }
 
+    // Runs the same auto-crop used for a single photo (see autoCropImageFile
+    // above) on one file from a bulk batch, before it goes anywhere near
+    // scanning or uploading — a bulk batch gets exactly the same crop and
+    // OCR/text-detection treatment a single receipt does, just without a
+    // preview to check each one against (there's no one image to show a
+    // crop toggle for across a whole batch, so each crop is applied
+    // automatically rather than offered as a choice). Non-image files
+    // (PDFs) pass through untouched — auto-crop is an image-only heuristic.
+    // Keeps the original filename, so a fallback title built from it still
+    // reads sensibly, and falls back to the original file untouched if
+    // cropping finds nothing worth cropping to or fails outright.
+    function cropIfImage(file) {
+      var isImage = /^image\//.test(file.type || '') || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(file.name || '');
+      if (!isImage) return Promise.resolve(file);
+      return autoCropImageFile(file).then(function (result) {
+        if (result && result.blob) return new File([result.blob], file.name, { type: 'image/jpeg' });
+        return file;
+      }).catch(function () { return file; });
+    }
+
     // Picking several files at once (via "Choose a file", which now allows
-    // multiple) skips the single-file capture/crop/scan flow above — there's
-    // no one set of fields to prefill for several different documents at
-    // once — and instead uploads each one as its own submission, using the
-    // shared engine every other upload point on the site uses for this
-    // (window.HouseagoDocScan.bulkUploadFiles), which also handles the
-    // per-file duplicate check. The auto-crop above is a single-photo
-    // feature and doesn't apply here; a bulk batch uploads each file as
-    // picked. "Type" and "Relates to" apply to the whole batch (there's
-    // nowhere to set them per file), so they're required up front, same as
-    // "Type" already is for a single submission.
+    // multiple) skips the single-file capture flow above — there's no one
+    // set of fields to prefill for several different documents at once —
+    // and instead uploads each one as its own submission: each image is
+    // auto-cropped first (see cropIfImage), then scanned and uploaded
+    // through the shared engine every other upload point on the site uses
+    // for this (window.HouseagoDocScan.bulkUploadFiles), which also
+    // handles the per-file duplicate check, on the cropped version so
+    // detection reads off the same tighter image a single upload would.
+    // "Type" and "Relates to" apply to the whole batch (there's nowhere to
+    // set them per file), so they're required up front, same as "Type"
+    // already is for a single submission.
     function handleBulkFiles(files) {
       if (!client || !currentSession) {
         fileStatus.textContent = 'This is a sample preview, so there is nothing real to upload yet.';
@@ -625,24 +646,27 @@
       var expenseType = expenseTypeSelect.value;
       var thisYear = String(new Date().getFullYear());
 
-      fileStatus.textContent = 'Uploading ' + files.length + ' files…';
-      window.HouseagoDocScan.bulkUploadFiles(files, {
-        client: client,
-        entityId: ENTITY_ID,
-        session: currentSession,
-        onProgress: function (done, total) { fileStatus.textContent = 'Uploading ' + done + ' of ' + total + '…'; },
-        buildRow: function (fields, file) {
-          return {
-            name: fields.title || file.name.replace(/\.[^.]+$/, ''),
-            year: fields.year || thisYear,
-            doc_date: fields.date || null,
-            amount: fields.amount != null ? Math.round(fields.amount * 100) / 100 : null,
-            notes: null,
-            related_entity_id: relatedEntityId,
-            expense_category: expenseCategoryChosen || fields.category || null,
-            expense_type: expenseType
-          };
-        }
+      fileStatus.textContent = 'Preparing ' + files.length + ' files…';
+      Promise.all(files.map(cropIfImage)).then(function (preparedFiles) {
+        fileStatus.textContent = 'Uploading ' + preparedFiles.length + ' files…';
+        return window.HouseagoDocScan.bulkUploadFiles(preparedFiles, {
+          client: client,
+          entityId: ENTITY_ID,
+          session: currentSession,
+          onProgress: function (done, total) { fileStatus.textContent = 'Uploading ' + done + ' of ' + total + '…'; },
+          buildRow: function (fields, file) {
+            return {
+              name: fields.title || file.name.replace(/\.[^.]+$/, ''),
+              year: fields.year || thisYear,
+              doc_date: fields.date || null,
+              amount: fields.amount != null ? Math.round(fields.amount * 100) / 100 : null,
+              notes: null,
+              related_entity_id: relatedEntityId,
+              expense_category: expenseCategoryChosen || fields.category || null,
+              expense_type: expenseType
+            };
+          }
+        });
       }).then(function (results) {
         fileStatus.textContent = window.HouseagoDocScan.summarizeBulkResults(results);
         loadReceipts(true);
