@@ -207,6 +207,15 @@ create table if not exists public.entity_documents (
   -- 'legionella'. Left null for anything else filed in that section, e.g. a
   -- tenancy agreement, which just appears in the ordinary document list.
   compliance_type text,
+  -- file_hash is a SHA-256 of the uploaded file's own bytes, used only to
+  -- flag when the exact same file is picked again on the same entity (the
+  -- same photo re-imported, the same PDF dragged in twice) — see hashFile/
+  -- findDuplicateByHash in doc-scan.js. Null for a pure ledger entry with
+  -- no attached document, and for any row uploaded before this column
+  -- existed (there is no way to compute a hash for those after the fact
+  -- without re-downloading and hashing every existing file, so this is
+  -- left unset rather than backfilled).
+  file_hash text,
   -- file_path is nullable because a row in a property's "...-income"
   -- section (see the Income sub-entities above) is a pure data record —
   -- a rent payment's date, description and amount, either picked out of
@@ -218,8 +227,8 @@ create table if not exists public.entity_documents (
 );
 
 -- If this table already existed before year/doc_date/notes/related_entity_id/
--- amount/expense_category/expense_type/entry_type/compliance_type were
--- added, these bring an existing database up to date (harmless to re-run —
+-- amount/expense_category/expense_type/entry_type/compliance_type/file_hash
+-- were added, these bring an existing database up to date (harmless to re-run —
 -- a fresh project just skips them since the columns above already created
 -- them).
 alter table public.entity_documents add column if not exists year text;
@@ -231,6 +240,7 @@ alter table public.entity_documents add column if not exists expense_category te
 alter table public.entity_documents add column if not exists expense_type text;
 alter table public.entity_documents add column if not exists entry_type text;
 alter table public.entity_documents add column if not exists compliance_type text;
+alter table public.entity_documents add column if not exists file_hash text;
 
 -- One-off backfill: existing "...-income" ledger rows predate entry_type
 -- and would otherwise all read as Income (including hand-typed expenses

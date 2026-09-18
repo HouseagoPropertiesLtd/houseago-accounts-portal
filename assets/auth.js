@@ -797,7 +797,7 @@
             '<div><label>Valid until (optional)</label><input type="date" name="valid_until"></div>' +
           '</div>' +
           window.HouseagoDocScan.categoryFieldHtml() +
-          window.HouseagoDocScan.captureFieldHtml({ label: 'File' }) +
+          window.HouseagoDocScan.captureFieldHtml({ label: 'File', multiple: true }) +
           '<button type="submit" class="btn btn-primary">Upload document</button>' +
           '<p class="form-status" role="status"></p>' +
         '</form>'
@@ -1017,11 +1017,39 @@
       var form = entitiesContainer.querySelector('[data-upload-entity="' + entityId + '"]');
       if (!form) return;
 
+      var currentYear = new Date().getFullYear();
+      var status = form.querySelector('.form-status');
+
+      function handleBulkFiles(files) {
+        status.textContent = 'Uploading ' + files.length + ' files…';
+        window.HouseagoDocScan.bulkUploadFiles(files, {
+          client: client,
+          entityId: entityId,
+          session: session,
+          onProgress: function (done, total) { status.textContent = 'Uploading ' + done + ' of ' + total + '…'; },
+          buildRow: function (fields, file) {
+            return {
+              name: fields.title || file.name.replace(/\.[^.]+$/, ''),
+              category: null,
+              expense_category: fields.category || null,
+              year: fields.year || String(currentYear),
+              valid_until: null
+            };
+          }
+        }).then(function (results) {
+          status.textContent = window.HouseagoDocScan.summarizeBulkResults(results);
+          form.reset();
+          capture.reset();
+          loadEntities(session);
+        });
+      }
+
       var capture = window.HouseagoDocScan.wireCaptureField(form, {
         dateInput: form.querySelector('input[name="valid_until"]'),
         nameInput: form.querySelector('input[name="name"]'),
         categorySelect: form.querySelector('select[name="expense_category"]'),
-        yearSelect: form.querySelector('select[name="year"]')
+        yearSelect: form.querySelector('select[name="year"]'),
+        onMultipleFiles: handleBulkFiles
       });
 
       form.addEventListener('submit', function (e) {
@@ -1035,48 +1063,62 @@
         var expenseCategory = form.querySelector('select[name="expense_category"]').value || null;
         var year = form.querySelector('select[name="year"]').value;
         var validUntil = form.querySelector('input[name="valid_until"]').value;
-        var status = form.querySelector('.form-status');
         var submitBtn = form.querySelector('button[type="submit"]');
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Uploading…';
         status.textContent = '';
 
-        // Every document ends up stored as a PDF, whatever was picked —
-        // an image gets wrapped into one, a PDF is left as-is.
-        window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
-          var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
-          var path = entityId + '/' + Date.now() + '-' + safeFileName;
+        function doUpload(hash) {
+          // Every document ends up stored as a PDF, whatever was picked —
+          // an image gets wrapped into one, a PDF is left as-is.
+          window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
+            var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+            var path = entityId + '/' + Date.now() + '-' + safeFileName;
 
-          client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
-            if (uploadResult.error) {
-              submitBtn.disabled = false;
-              submitBtn.textContent = 'Upload document';
-              status.textContent = 'Could not upload that file. Please try again.';
-              return;
-            }
-
-            client.from('entity_documents').insert({
-              entity_id: entityId,
-              name: name,
-              category: category || null,
-              expense_category: expenseCategory,
-              year: year || null,
-              valid_until: validUntil || null,
-              file_path: path,
-              uploaded_by: session.user.id
-            }).then(function (insertResult) {
-              submitBtn.disabled = false;
-              submitBtn.textContent = 'Upload document';
-              if (insertResult.error) {
-                status.textContent = 'The file uploaded, but could not be added to the document list. Please try again.';
+            client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
+              if (uploadResult.error) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Upload document';
+                status.textContent = 'Could not upload that file. Please try again.';
                 return;
               }
-              status.textContent = 'Uploaded.';
-              form.reset();
-              capture.reset();
-              loadEntities(session);
+
+              client.from('entity_documents').insert({
+                entity_id: entityId,
+                name: name,
+                category: category || null,
+                expense_category: expenseCategory,
+                year: year || null,
+                valid_until: validUntil || null,
+                file_path: path,
+                file_hash: hash || null,
+                uploaded_by: session.user.id
+              }).then(function (insertResult) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Upload document';
+                if (insertResult.error) {
+                  status.textContent = 'The file uploaded, but could not be added to the document list. Please try again.';
+                  return;
+                }
+                status.textContent = 'Uploaded.';
+                form.reset();
+                capture.reset();
+                loadEntities(session);
+              });
             });
+          });
+        }
+
+        window.HouseagoDocScan.hashFile(file).then(function (hash) {
+          window.HouseagoDocScan.findDuplicateByHash(client, entityId, hash).then(function (existing) {
+            if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Upload it again anyway?')) {
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Upload document';
+              status.textContent = 'Not uploaded — already on file.';
+              return;
+            }
+            doUpload(hash);
           });
         });
       });

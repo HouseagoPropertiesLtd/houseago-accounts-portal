@@ -402,27 +402,160 @@
     return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
   }
 
+  // ---- Duplicate detection --------------------------------------------
+  // A SHA-256 of the file's own bytes, stored alongside each upload
+  // (entity_documents.file_hash) so the exact same file picked again later
+  // — the same photo re-imported, the same PDF dragged in twice — can be
+  // flagged rather than silently saved a second time. This only ever
+  // catches a byte-for-byte match: a rescan, a re-export, or a photo taken
+  // a second time of the same receipt will have a different hash and
+  // won't be caught, same as any other checksum-based check.
+  function hashFile(file) {
+    if (!file || !window.crypto || !window.crypto.subtle) return Promise.resolve(null);
+    return file.arrayBuffer().then(function (buf) {
+      return window.crypto.subtle.digest('SHA-256', buf);
+    }).then(function (digest) {
+      var bytes = new Uint8Array(digest);
+      var hex = '';
+      for (var i = 0; i < bytes.length; i++) {
+        var h = bytes[i].toString(16);
+        hex += h.length < 2 ? '0' + h : h;
+      }
+      return hex;
+    }).catch(function () { return null; });
+  }
+
+  // Looks for an existing document on this same entity with the same file
+  // hash — null if there's no match, hashing failed, or the lookup itself
+  // failed (never blocks an upload just because the check couldn't run).
+  function findDuplicateByHash(client, entityId, hash) {
+    if (!client || !hash) return Promise.resolve(null);
+    return client.from('entity_documents')
+      .select('id, name, created_at')
+      .eq('entity_id', entityId)
+      .eq('file_hash', hash)
+      .limit(1)
+      .then(function (result) { return (result.data && result.data[0]) || null; })
+      .catch(function () { return null; });
+  }
+
+  // ---- Bulk upload: several files at once, each becoming its own document
+  // Used wherever a "Choose a file" button allows multiple (see
+  // captureFieldHtml's { multiple: true }) — one file at a time (parallel
+  // OCR/uploads are slower and flakier, and a running "3 of 12" count is
+  // easier to follow than several finishing out of order), each scanned,
+  // checked against this entity's other documents by file hash, and
+  // uploaded on its own, so nobody has to fill in and submit the same form
+  // over and over for a stack of documents.
+  //
+  // bulkUploadFiles(files, opts) -> Promise<{ uploaded, duplicates, skipped, failed }>
+  // opts:
+  //   client, entityId, session, bucket (default 'owner-documents')
+  //   buildRow(fields, file) -> the columns this file's row should have
+  //     beyond entity_id/file_path/file_hash/uploaded_by (which this
+  //     function always sets itself) — return a falsy value to skip the
+  //     file entirely without uploading it (e.g. the ledger skips a file
+  //     with no detectable amount rather than create a blank entry).
+  //   onProgress(done, total, file, outcome) — outcome is 'uploaded',
+  //     'duplicate', 'skipped', or 'failed'.
+  function bulkUploadFiles(files, opts) {
+    opts = opts || {};
+    var client = opts.client;
+    var entityId = opts.entityId;
+    var bucket = opts.bucket || 'owner-documents';
+    var uploadedBy = (opts.session && opts.session.user) ? opts.session.user.id : null;
+    var results = { uploaded: [], duplicates: [], skipped: [], failed: [] };
+
+    function report(outcome, entry) {
+      results[outcome].push(entry);
+      if (opts.onProgress) {
+        var done = results.uploaded.length + results.duplicates.length + results.skipped.length + results.failed.length;
+        opts.onProgress(done, files.length, entry.file, outcome);
+      }
+    }
+
+    function uploadOne(file) {
+      return hashFile(file).then(function (hash) {
+        return findDuplicateByHash(client, entityId, hash).then(function (existing) {
+          if (existing) { report('duplicates', { file: file, existing: existing }); return; }
+
+          return scanFileForFields(file).then(function (fields) {
+            var extra = opts.buildRow ? opts.buildRow(fields, file) : {};
+            if (!extra) { report('skipped', { file: file, fields: fields }); return; }
+
+            return window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
+              var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+              // A random suffix alongside the timestamp, since several
+              // files in one bulk batch can otherwise land in the same
+              // millisecond and collide on the same storage path.
+              var path = entityId + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '-' + safeFileName;
+
+              return client.storage.from(bucket).upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
+                if (uploadResult.error) { report('failed', { file: file }); return; }
+
+                var row = {};
+                for (var k in extra) row[k] = extra[k];
+                row.entity_id = entityId;
+                row.file_path = path;
+                row.file_hash = hash;
+                row.uploaded_by = uploadedBy;
+
+                return client.from('entity_documents').insert(row).then(function (insertResult) {
+                  if (insertResult.error) { report('failed', { file: file }); return; }
+                  report('uploaded', { file: file, fields: fields });
+                });
+              });
+            });
+          });
+        });
+      }).catch(function () { report('failed', { file: file }); });
+    }
+
+    var chain = Promise.resolve();
+    files.forEach(function (file) { chain = chain.then(function () { return uploadOne(file); }); });
+    return chain.then(function () { return results; });
+  }
+
+  // One-line summary of a bulkUploadFiles() result, for the status line
+  // under a form after a batch finishes — e.g. "4 uploaded, 1 already
+  // uploaded before (skipped), 2 skipped (nothing usable found)."
+  function summarizeBulkResults(results) {
+    var bits = [];
+    if (results.uploaded.length) bits.push(results.uploaded.length + ' uploaded');
+    if (results.duplicates.length) bits.push(results.duplicates.length + ' already uploaded before (skipped)');
+    if (results.skipped.length) bits.push(results.skipped.length + ' skipped (nothing usable found)');
+    if (results.failed.length) bits.push(results.failed.length + ' failed');
+    return bits.length ? bits.join(', ') + '.' : 'Nothing to upload.';
+  }
+
   // ---- Reusable "Take a photo / Choose a file" capture widget -----------
   // Drops into any upload form in place of a plain <input type="file">.
   // Once a file's picked, it's scanned in the background and — only for
   // whichever fields the caller actually points at, and only if they're
   // still empty — the date and/or amount found are filled in for the
   // person to check, never overwriting something they've already typed.
+  //
+  // Pass { multiple: true } to also let "Choose a file" pick several files
+  // at once (a camera photo is always one file at a time, so that button
+  // is unaffected) — see wireCaptureField's onMultipleFiles for what
+  // happens when more than one file actually gets picked.
   function captureFieldHtml(opts) {
     opts = opts || {};
     var label = opts.label || 'Document';
     var accept = opts.accept || 'image/*,application/pdf';
+    var chooseLabel = opts.multiple ? 'Choose file(s)' : 'Choose a file';
+    var statusText = opts.multiple ? 'No file chosen yet. You can select more than one at once.' : 'No file chosen yet.';
     return (
       '<div>' +
         '<label>' + label + '</label>' +
         '<div class="capture-row">' +
           '<button type="button" class="btn btn-outline" data-scan-capture-btn>Take a photo</button>' +
-          '<button type="button" class="btn btn-outline" data-scan-choose-btn>Choose a file</button>' +
+          '<button type="button" class="btn btn-outline" data-scan-choose-btn>' + chooseLabel + '</button>' +
           '<button type="button" class="btn-text" data-scan-clear-btn hidden>Clear</button>' +
         '</div>' +
         '<input type="file" data-scan-camera accept="image/*" capture="environment" hidden>' +
-        '<input type="file" data-scan-picker accept="' + accept + '" hidden>' +
-        '<p class="form-status" role="status" data-scan-status>No file chosen yet.</p>' +
+        '<input type="file" data-scan-picker accept="' + accept + '"' + (opts.multiple ? ' multiple' : '') + ' hidden>' +
+        '<p class="form-status" role="status" data-scan-status>' + statusText + '</p>' +
       '</div>'
     );
   }
@@ -443,7 +576,7 @@
     return false;
   }
 
-  // wireCaptureField(form, { dateInput, amountInput, nameInput, categorySelect, yearSelect, entryTypeSelect, entryTypeOverridable })
+  // wireCaptureField(form, { dateInput, amountInput, nameInput, categorySelect, yearSelect, entryTypeSelect, entryTypeOverridable, onMultipleFiles })
   // -> { getFile, reset }
   //
   // Every field named here is filled in automatically from whatever the
@@ -460,6 +593,18 @@
   // result overwrite that earlier guess — auto-guessed from the document
   // takes priority over auto-guessed from typing, but neither one is ever
   // allowed to overwrite something the person actually chose by hand.
+  //
+  // onMultipleFiles(files) is how a caller opts into bulk uploads: when
+  // "Choose a file" was rendered with { multiple: true } (see
+  // captureFieldHtml) and more than one file actually gets picked, this
+  // widget doesn't try to scan-and-prefill the single set of form fields
+  // (which wouldn't make sense for several different documents at once) —
+  // it just hands the whole file list to onMultipleFiles and leaves
+  // scanning and uploading each one to the caller, since only the caller
+  // knows how to save a document (property.js/person.js/auth.js each do
+  // this the same way — see their wireUploadForm's uploadFilesInBulk).
+  // Picking exactly one file, even with multiple allowed, still goes
+  // through the normal single-file flow below.
   function wireCaptureField(form, opts) {
     opts = opts || {};
     var cameraInput = form.querySelector('[data-scan-camera]');
@@ -520,7 +665,17 @@
     }
 
     if (cameraInput) cameraInput.addEventListener('change', function () { handle(cameraInput.files[0]); });
-    if (pickerInput) pickerInput.addEventListener('change', function () { handle(pickerInput.files[0]); });
+    if (pickerInput) {
+      pickerInput.addEventListener('change', function () {
+        var files = pickerInput.files;
+        if (files.length > 1 && opts.onMultipleFiles) {
+          opts.onMultipleFiles(Array.prototype.slice.call(files));
+          pickerInput.value = '';
+          return;
+        }
+        handle(files[0]);
+      });
+    }
 
     function doReset() {
       currentFile = null;
@@ -551,6 +706,10 @@
     categoryFieldHtml: categoryFieldHtml,
     populateCategorySelect: populateCategorySelect,
     guessDocType: guessDocType,
-    guessEntryType: guessEntryType
+    guessEntryType: guessEntryType,
+    hashFile: hashFile,
+    findDuplicateByHash: findDuplicateByHash,
+    bulkUploadFiles: bulkUploadFiles,
+    summarizeBulkResults: summarizeBulkResults
   };
 })();
