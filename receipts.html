@@ -77,8 +77,8 @@
             <button type="button" class="btn-text" id="receipt-clear-btn" hidden>Clear</button>
           </div>
           <input type="file" id="receipt-file-camera" accept="image/*" capture="environment" hidden>
-          <input type="file" id="receipt-file-picker" accept="image/*,application/pdf" hidden>
-          <p class="form-status" role="status" id="receipt-file-status">No file chosen yet.</p>
+          <input type="file" id="receipt-file-picker" accept="image/*,application/pdf" multiple hidden>
+          <p class="form-status" role="status" id="receipt-file-status">No file chosen yet. You can select more than one at once with "Choose a file".</p>
 
           <div id="receipt-preview-card" class="capture-preview" hidden>
             <img id="receipt-preview-img" alt="Preview of the photographed receipt">

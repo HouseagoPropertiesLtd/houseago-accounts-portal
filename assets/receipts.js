@@ -508,6 +508,7 @@
 
     var latestReceiptDocs = [];
     var latestNamesById = {};
+    var currentSession = null; // set once we have a real session, for bulk uploads (see handleBulkFiles)
 
     if (exportBtn) {
       exportBtn.addEventListener('click', function () {
@@ -599,6 +600,55 @@
       }
     }
 
+    // Picking several files at once (via "Choose a file", which now allows
+    // multiple) skips the single-file capture/crop/scan flow above — there's
+    // no one set of fields to prefill for several different documents at
+    // once — and instead uploads each one as its own submission, using the
+    // shared engine every other upload point on the site uses for this
+    // (window.HouseagoDocScan.bulkUploadFiles), which also handles the
+    // per-file duplicate check. The auto-crop above is a single-photo
+    // feature and doesn't apply here; a bulk batch uploads each file as
+    // picked. "Type" and "Relates to" apply to the whole batch (there's
+    // nowhere to set them per file), so they're required up front, same as
+    // "Type" already is for a single submission.
+    function handleBulkFiles(files) {
+      if (!client || !currentSession) {
+        fileStatus.textContent = 'This is a sample preview, so there is nothing real to upload yet.';
+        return;
+      }
+      if (!expenseTypeSelect.value) {
+        fileStatus.textContent = 'Please choose a Type below first — it applies to the whole batch — then choose your files again.';
+        return;
+      }
+      var relatedEntityId = relatedSelect.value || null;
+      var expenseCategoryChosen = categorySelect.value || null;
+      var expenseType = expenseTypeSelect.value;
+      var thisYear = String(new Date().getFullYear());
+
+      fileStatus.textContent = 'Uploading ' + files.length + ' files…';
+      window.HouseagoDocScan.bulkUploadFiles(files, {
+        client: client,
+        entityId: ENTITY_ID,
+        session: currentSession,
+        onProgress: function (done, total) { fileStatus.textContent = 'Uploading ' + done + ' of ' + total + '…'; },
+        buildRow: function (fields, file) {
+          return {
+            name: fields.title || file.name.replace(/\.[^.]+$/, ''),
+            year: fields.year || thisYear,
+            doc_date: fields.date || null,
+            amount: fields.amount != null ? Math.round(fields.amount * 100) / 100 : null,
+            notes: null,
+            related_entity_id: relatedEntityId,
+            expense_category: expenseCategoryChosen || fields.category || null,
+            expense_type: expenseType
+          };
+        }
+      }).then(function (results) {
+        fileStatus.textContent = window.HouseagoDocScan.summarizeBulkResults(results);
+        loadReceipts(true);
+      });
+    }
+
     function applyScanResult(fields) {
       if (fields.date) {
         dateInput.value = fields.date;
@@ -630,7 +680,15 @@
     }
     if (chooseBtn && pickerInput) {
       chooseBtn.addEventListener('click', function () { pickerInput.click(); });
-      pickerInput.addEventListener('change', function () { handleFileChosen(pickerInput.files[0]); });
+      pickerInput.addEventListener('change', function () {
+        var files = pickerInput.files;
+        if (files.length > 1) {
+          handleBulkFiles(Array.prototype.slice.call(files));
+          pickerInput.value = '';
+          return;
+        }
+        handleFileChosen(files[0]);
+      });
     }
     if (clearBtn) {
       clearBtn.addEventListener('click', function () {
@@ -638,7 +696,7 @@
         revertAutofills();
         if (cameraInput) cameraInput.value = '';
         if (pickerInput) pickerInput.value = '';
-        fileStatus.textContent = 'No file chosen yet.';
+        fileStatus.textContent = 'No file chosen yet. You can select more than one at once with "Choose a file".';
         dateStatus.textContent = "Choose a file above and we'll try to read its date automatically.";
         amountStatus.textContent = '';
         clearBtn.hidden = true;
@@ -706,6 +764,7 @@
         window.location.href = 'index.html';
         return;
       }
+      currentSession = session;
 
       client
         .from('portal_access')
@@ -895,48 +954,66 @@
         var status = document.getElementById('receipt-upload-status');
         var submitBtn = form.querySelector('button[type="submit"]');
 
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Submitting…';
-        status.textContent = '';
+        function doSubmit(hash) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Submitting…';
+          status.textContent = '';
 
-        window.HouseagoPdfConvert.toPdfIfImage(upload).then(function (finalUpload) {
-          var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
-          var path = ENTITY_ID + '/' + Date.now() + '-' + safeFileName;
+          window.HouseagoPdfConvert.toPdfIfImage(upload).then(function (finalUpload) {
+            var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+            var path = ENTITY_ID + '/' + Date.now() + '-' + safeFileName;
 
-          client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
-            if (uploadResult.error) {
-              submitBtn.disabled = false;
-              submitBtn.textContent = 'Submit';
-              status.textContent = 'Could not upload that file. Please try again.';
-              return;
-            }
-
-            client.from('entity_documents').insert({
-              entity_id: ENTITY_ID,
-              name: name,
-              year: date ? date.slice(0, 4) : null,
-              doc_date: date || null,
-              amount: (amount != null && !isNaN(amount)) ? amount : null,
-              notes: description || null,
-              related_entity_id: relatedEntityId,
-              expense_category: expenseCategory,
-              expense_type: expenseType,
-              file_path: path,
-              uploaded_by: session.user.id
-            }).then(function (insertResult) {
-              submitBtn.disabled = false;
-              submitBtn.textContent = 'Submit';
-              if (insertResult.error) {
-                status.textContent = 'The file uploaded, but could not be saved. Please try again.';
+            client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
+              if (uploadResult.error) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit';
+                status.textContent = 'Could not upload that file. Please try again.';
                 return;
               }
-              status.textContent = 'Submitted.';
-              form.reset();
-              resetCaptureState();
-              scanAutofilled = [];
-              if (clearBtn) clearBtn.hidden = true;
-              loadReceipts(true);
+
+              client.from('entity_documents').insert({
+                entity_id: ENTITY_ID,
+                name: name,
+                year: date ? date.slice(0, 4) : null,
+                doc_date: date || null,
+                amount: (amount != null && !isNaN(amount)) ? amount : null,
+                notes: description || null,
+                related_entity_id: relatedEntityId,
+                expense_category: expenseCategory,
+                expense_type: expenseType,
+                file_path: path,
+                file_hash: hash || null,
+                uploaded_by: session.user.id
+              }).then(function (insertResult) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit';
+                if (insertResult.error) {
+                  status.textContent = 'The file uploaded, but could not be saved. Please try again.';
+                  return;
+                }
+                status.textContent = 'Submitted.';
+                form.reset();
+                resetCaptureState();
+                scanAutofilled = [];
+                if (clearBtn) clearBtn.hidden = true;
+                loadReceipts(true);
+              });
             });
+          });
+        }
+
+        // Flag re-submitting the exact same file, same as every other
+        // upload point on the site — the file's own bytes are hashed and
+        // checked against what's already on this Receipts & Invoices
+        // entity, so a receipt photographed or picked twice by mistake
+        // gets a confirmation rather than a silent duplicate.
+        window.HouseagoDocScan.hashFile(upload.blob).then(function (hash) {
+          window.HouseagoDocScan.findDuplicateByHash(client, ENTITY_ID, hash).then(function (existing) {
+            if (existing && !window.confirm('This exact file looks like it’s already been submitted (as "' + existing.name + '"). Submit it again anyway?')) {
+              status.textContent = 'Not submitted — already on file.';
+              return;
+            }
+            doSubmit(hash);
           });
         });
       });
