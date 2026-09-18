@@ -9,7 +9,7 @@
 // straight to the network, untouched, so nothing here can ever serve stale
 // or incorrect account data.
 
-var CACHE_NAME = 'houseago-asset-management-v18';
+var CACHE_NAME = 'houseago-asset-management-v19';
 
 var PRECACHE_URLS = [
   './',
