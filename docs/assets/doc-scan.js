@@ -274,10 +274,87 @@
     return null;
   }
 
+  // A phone photo of a receipt is almost never as clean as a proper scan -
+  // uneven lighting, a shadow across half the page, a slightly grey
+  // "white" background - and Tesseract (like most OCR) reads noticeably
+  // worse on that than on a flat, high-contrast image. This redraws the
+  // photo in grayscale with its contrast stretched so the darkest pixel in
+  // the shot becomes black and the lightest becomes white, before handing
+  // it to Tesseract - a standard, well-understood preprocessing step for
+  // OCR-on-photos (as opposed to OCR-on-scans) that costs a fraction of a
+  // second and measurably improves read rates on uneven lighting, without
+  // ever risking making a fine image worse in a way that matters (a
+  // photo that was already high-contrast is stretched to essentially
+  // itself). Never blocks OCR: any failure here just falls back to
+  // running Tesseract on the original, untouched file.
+  function preprocessForOcr(imageSource) {
+    if (!(imageSource instanceof Blob)) return Promise.resolve(imageSource);
+    return loadImageFromBlob(imageSource).then(function (loaded) {
+      var img = loaded.img;
+      var w = img.naturalWidth, h = img.naturalHeight;
+      URL.revokeObjectURL(loaded.url);
+      if (!w || !h) return imageSource;
+
+      // Cap the working size - OCR accuracy doesn't keep improving much
+      // past ~1800px on the long edge, and a modern phone photo can
+      // easily be 3-4x that, which just makes Tesseract slower for no
+      // benefit.
+      var scale = Math.min(1, 1800 / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+
+      var canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, cw, ch);
+
+      var imgData;
+      try {
+        imgData = ctx.getImageData(0, 0, cw, ch);
+      } catch (e) {
+        return imageSource; // can't read pixels back - just OCR the original
+      }
+      var data = imgData.data;
+
+      var n = cw * ch;
+      var gray = new Uint8ClampedArray(n);
+      var lo = 255, hi = 0;
+      for (var i = 0, p = 0; i < data.length; i += 4, p++) {
+        var g = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        gray[p] = g;
+        if (g < lo) lo = g;
+        if (g > hi) hi = g;
+      }
+      var range = hi - lo;
+      if (range < 10) return imageSource; // already flat/blank - stretching would just amplify noise
+
+      var factor = 255 / range;
+      for (var p2 = 0, di = 0; p2 < n; p2++, di += 4) {
+        var v = Math.round((gray[p2] - lo) * factor);
+        data[di] = data[di + 1] = data[di + 2] = v;
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      return new Promise(function (resolve) {
+        canvas.toBlob(function (blob) { resolve(blob || imageSource); }, 'image/jpeg', 0.95);
+      });
+    }).catch(function () { return imageSource; });
+  }
+
+  function loadImageFromBlob(blob) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () { resolve({ img: img, url: url }); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+      img.src = url;
+    });
+  }
+
   function ocrText(imageSource) {
     if (typeof Tesseract === 'undefined') return Promise.resolve('');
-    return Tesseract.recognize(imageSource, 'eng')
-      .then(function (result) { return (result && result.data && result.data.text) || ''; })
+    return preprocessForOcr(imageSource).then(function (prepared) {
+      return Tesseract.recognize(prepared, 'eng');
+    }).then(function (result) { return (result && result.data && result.data.text) || ''; })
       .catch(function () { return ''; });
   }
 

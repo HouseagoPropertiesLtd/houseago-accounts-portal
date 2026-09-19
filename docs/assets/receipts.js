@@ -296,7 +296,7 @@
       var y1 = Math.min(workH, rowBox.end + padY);
 
       var areaFrac = ((x1 - x0) * (y1 - y0)) / (workW * workH);
-      if (areaFrac > 0.97 || areaFrac < 0.05) return null; // nothing worth cropping to
+      if (areaFrac > 0.99 || areaFrac < 0.05) return null; // nothing worth cropping to
 
       var fx0 = Math.round(x0 / scale), fy0 = Math.round(y0 / scale);
       var fx1 = Math.round(x1 / scale), fy1 = Math.round(y1 / scale);

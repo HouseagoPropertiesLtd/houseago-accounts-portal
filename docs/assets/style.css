@@ -288,7 +288,7 @@ section { padding: 60px 0; }
 .year-filter-row select {
   width: auto;
   padding: 6px 30px 6px 12px;
-  font-size: 0.85rem;
+  font-size: 1rem; /* 16px floor - see the comment on form.form-card input above */
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
@@ -394,7 +394,15 @@ form.form-card select {
   border: 1px solid var(--line);
   border-radius: 4px;
   font-family: inherit;
-  font-size: 0.95rem;
+  /* Kept at (or above) 16px deliberately: any form field smaller than
+     that makes iOS Safari auto-zoom the whole page the moment someone
+     taps into it, which is exactly what makes a phone visit feel like
+     "the layout breaks" every time a field is used - the page jumps to
+     a zoomed-in state that doesn't reset itself. Every text input and
+     select a person actually types into or picks from on this site
+     needs to stay at 16px or more for the same reason (see
+     .year-filter-row select and .chart-fy-picker select below). */
+  font-size: 1rem;
   background: var(--alabaster);
   color: var(--ink);
 }
@@ -447,7 +455,7 @@ form.form-card select {
 .chart-fy-picker select {
   width: auto;
   padding: 6px 30px 6px 12px;
-  font-size: 0.85rem;
+  font-size: 1rem; /* 16px floor - see the comment on form.form-card input above */
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
