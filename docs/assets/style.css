@@ -782,3 +782,31 @@ body.theme-dark .btn-primary:hover { background: #af9287; }
 body.theme-dark { --chart-income: #3fa876; --chart-expense: #cc7a3d; }
 body.theme-dark .chart-legend-swatch.chart-legend-income { background: var(--chart-income); }
 body.theme-dark .chart-legend-swatch.chart-legend-expense { background: var(--chart-expense); }
+
+/* ---------- Portal login / reset-password (dark theme) --------------------
+   index.html and reset-password.html now carry theme-dark too, so the
+   pre-login screens match the rest of the site instead of standing out as
+   a lighter page in front of it. The shell's radial highlights and the
+   card itself are a hero component with their own literal light-mode
+   colours (not built from --panel/--sandstone like the rest of the dark
+   theme already covers automatically), so they need explicit treatment
+   here, same reasoning as everything else in this dark-theme block. */
+body.theme-dark .portal-shell {
+  background:
+    radial-gradient(ellipse 900px 560px at 15% 10%, rgba(216, 182, 168, 0.16), transparent 60%),
+    radial-gradient(ellipse 900px 620px at 85% 90%, rgba(255, 255, 255, 0.06), transparent 60%),
+    var(--navy-grad);
+}
+body.theme-dark .portal-card {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--line);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.4);
+}
+body.theme-dark .portal-card input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--line);
+  color: var(--ink);
+}
+body.theme-dark .portal-card input::placeholder { color: rgba(245, 241, 234, 0.4); }
+body.theme-dark .portal-note { background: rgba(216, 182, 168, 0.14); }
+body.theme-dark .portal-note code { background: rgba(255, 255, 255, 0.12); }
