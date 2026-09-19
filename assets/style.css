@@ -767,13 +767,15 @@ body.theme-dark .chart-bar-tooltip { background: #0d1521; }
 
 /* .btn-primary is normally the navy gradient, which is exactly the page's
    own background colour on a dark-theme page — so on these pages it needs
-   a distinct, warm accent colour instead, dark enough text to stay legible
-   against it (contrast ratio ~6.6:1, comfortably AA/AAA). */
+   a distinct accent instead. Uses the brand book's dusk pink (--rose) with
+   dark navy text (contrast ratio ~7.2:1, comfortably AA/AAA); hover is a
+   slightly deeper shade of the same pink, not the unrelated --rose-deep
+   (that pairing drops text contrast too low to stay legible on hover). */
 body.theme-dark .btn-primary {
-  background: #d89b53;
+  background: var(--rose);
   color: #152238;
 }
-body.theme-dark .btn-primary:hover { background: #c07f3a; }
+body.theme-dark .btn-primary:hover { background: #af9287; }
 
 /* The monthly income/expense chart's colour pair, independently validated
    against this dark surface (not a flip of the light-mode pair above). */
