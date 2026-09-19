@@ -9,12 +9,13 @@
 // straight to the network, untouched, so nothing here can ever serve stale
 // or incorrect account data.
 
-var CACHE_NAME = 'houseago-asset-management-v26';
+var CACHE_NAME = 'houseago-asset-management-v27';
 
 var PRECACHE_URLS = [
   './',
   'index.html',
   'dashboard.html',
+  'asset-overview.html',
   'asset-summary.html',
   'financial-dashboard.html',
   'receipts.html',
@@ -24,7 +25,7 @@ var PRECACHE_URLS = [
   'manifest.webmanifest',
   'assets/style.css',
   'assets/auth.js',
-  'assets/asset-summary.js',
+  'assets/asset-overview.js',
   'assets/receipts.js',
   'assets/property.js',
   'assets/person.js',

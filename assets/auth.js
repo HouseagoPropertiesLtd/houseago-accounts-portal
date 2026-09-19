@@ -171,7 +171,7 @@
       if (loginForm) {
         loginForm.addEventListener('submit', function (e) {
           e.preventDefault();
-          window.location.href = 'asset-summary.html';
+          window.location.href = 'asset-overview.html';
         });
       }
 
@@ -336,7 +336,7 @@
                 status.textContent = 'That code wasn’t recognised. Check the time on your phone is correct, and try the next code your app shows.';
                 return;
               }
-              window.location.href = 'asset-summary.html';
+              window.location.href = 'asset-overview.html';
             });
           });
         });
@@ -387,7 +387,7 @@
             showEnrollStep();
             return;
           }
-          window.location.href = 'asset-summary.html';
+          window.location.href = 'asset-overview.html';
         });
       }
 
@@ -457,7 +457,7 @@
                   mfaForm.querySelector('#portal-mfa-code').focus();
                   return;
                 }
-                window.location.href = 'asset-summary.html';
+                window.location.href = 'asset-overview.html';
               });
             });
           });

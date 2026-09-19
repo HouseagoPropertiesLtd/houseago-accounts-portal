@@ -19,7 +19,7 @@
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Asset Breakdown | Houseago Asset Management</title>
+<title>Asset Overview | Houseago Asset Management</title>
 <meta name="description" content="Private document portal for Houseago Properties Ltd, sole trader and property accounts.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -35,7 +35,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300..700;1,300..700&family=Rethink+Sans:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
 </head>
-<body>
+<body class="theme-dark">
 
 <header class="site-header">
   <div class="header-inner">
@@ -43,7 +43,7 @@
       <span class="brand-word"><span class="brand-word-1">Houseago</span><span class="brand-word-2">Asset Management</span></span>
     </a>
     <div class="header-actions">
-      <a href="asset-overview.html" class="btn btn-outline">Asset Overview</a>
+      <a href="dashboard.html" class="btn btn-outline">Asset Breakdown</a>
       <a href="security.html" class="btn btn-outline">Security</a>
       <a href="index.html" class="btn btn-outline" data-portal-logout>Log out</a>
     </div>
@@ -65,15 +65,49 @@
     </div>
 
     <div class="section-head left">
-      <p class="eyebrow">Asset Breakdown</p>
-      <h2>Your accounts and properties, in one place</h2>
-      <p>Each section below is a company, sole trader account, or property you have access to. Upload documents where you can, and download anything already there. Looking for the numbers instead? See the <a href="asset-overview.html" style="font-weight:700; color:var(--navy); text-decoration:underline;">Asset Overview</a>.</p>
+      <p class="eyebrow">Asset Overview</p>
+      <h2>How the portfolio is doing</h2>
+      <p>Income and expenses, plus whether each property's compliance and tenancy paperwork is up to date — pulled together from every property's own page and everyone's Receipts &amp; Invoices. A guide, not a substitute for your accounts. Looking for the documents themselves? See the <a href="dashboard.html" style="font-weight:700; color:var(--navy); text-decoration:underline;">Asset Breakdown</a>.</p>
     </div>
 
-    <div id="expiring-soon-banner" class="expiring-banner" hidden></div>
+    <div id="fd-empty" class="entity-card" hidden>
+      <p>Nothing recorded yet. Add income and outgoings on a property's own page, or submit a receipt or invoice, to see a summary here.</p>
+    </div>
 
-    <div id="entities-container">
-      <div class="entity-card"><p>Loading your sections&hellip;</p></div>
+    <div id="fd-main" hidden>
+
+      <div class="chart-controls-row" style="margin-bottom:0;">
+        <div class="chart-fy-picker">
+          <label for="fd-fy-select">Financial year</label>
+          <select id="fd-fy-select"></select>
+        </div>
+      </div>
+
+      <div id="fd-stat-tiles" class="stat-tiles"></div>
+
+      <div class="entity-card">
+        <div class="section-head left"><h2>Expenses by category</h2></div>
+        <div id="fd-category-breakdown"></div>
+      </div>
+
+      <div class="entity-card">
+        <div class="section-head left"><h2>By property</h2><p>This financial year, across everything you have access to.</p></div>
+        <div id="fd-property-breakdown" class="income-chart"></div>
+      </div>
+
+      <div class="entity-card">
+        <div class="section-head left"><h2>Income &amp; outgoings by year</h2><p>Every financial year on record, most recent first.</p></div>
+        <div id="fd-trend" class="income-chart"></div>
+      </div>
+
+    </div>
+
+    <div id="fd-compliance-card" class="entity-card" hidden>
+      <div class="section-head left">
+        <h2>Compliance &amp; Tenancy</h2>
+        <p>Whether each property's tracked certificates are in date, and whether its tenancy paperwork (deposit protection and inventory) is on file. Updates automatically as things expire or get renewed — see a property's own page for the detail and to add anything missing.</p>
+      </div>
+      <div id="fd-compliance-list" class="compliance-status"></div>
     </div>
 
   </div>
@@ -88,13 +122,8 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-<script src="assets/pdf-convert.js"></script>
-<script src="assets/doc-scan.js"></script>
 <script src="assets/supabase-config.js"></script>
 <script src="assets/pwa.js"></script>
-<script src="assets/auth.js"></script>
+<script src="assets/asset-overview.js"></script>
 </body>
 </html>

@@ -525,7 +525,7 @@ form.form-card select {
 .category-row:last-child { border-bottom: none; }
 .category-row span:last-child { font-weight: 700; }
 
-/* ---------- Stat tiles (Financial Summary overview cards) ---------------- */
+/* ---------- Stat tiles (Asset Overview cards) ----------------------------- */
 .stat-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -652,3 +652,36 @@ footer.site-footer a:hover { color: var(--rose); }
   .doc-row { flex-direction: column; align-items: flex-start; }
   .doc-row-actions { width: 100%; justify-content: space-between; }
 }
+
+/* ---------- Dark theme (Asset Overview, the post-login landing page) -----
+   Applied via <body class="theme-dark">. Every card, pill, button, and
+   form control on the site is already built from these shared design
+   tokens (--ink, --ink-soft, --line, --panel, --sandstone, --rose-deep,
+   --navy) rather than one-off colours, so redefining the tokens here is
+   enough to make the whole page read correctly on a dark background —
+   only the hardcoded status-pill colours and a couple of hover states
+   need their own rules below, same as .bg-navy already does elsewhere on
+   the site for the same reason. */
+body.theme-dark {
+  --ink: #f5f1ea;
+  --ink-soft: rgba(245, 241, 234, 0.74);
+  --line: rgba(255, 255, 255, 0.16);
+  --panel: rgba(255, 255, 255, 0.06);
+  --sandstone: rgba(255, 255, 255, 0.08);
+  --rose-deep: #d8b6a8;
+  --navy: #d8b6a8;
+  background: var(--navy-grad);
+}
+body.theme-dark .bg-panel { background: var(--navy-grad); }
+body.theme-dark .site-header {
+  background: rgba(13, 21, 33, 0.55);
+  border-bottom-color: rgba(255, 255, 255, 0.14);
+}
+body.theme-dark .btn-outline:hover { background: rgba(255, 255, 255, 0.92); color: #152238; }
+body.theme-dark .portal-avatar { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
+body.theme-dark .status-good { color: #8fe3b3; background: rgba(31, 122, 77, 0.3); }
+body.theme-dark .status-warning { color: #ffd08a; background: rgba(154, 91, 0, 0.3); }
+body.theme-dark .status-critical { color: #ffa79e; background: rgba(179, 38, 30, 0.32); }
+body.theme-dark .status-neutral, body.theme-dark .status-missing { color: rgba(255, 255, 255, 0.7); background: rgba(255, 255, 255, 0.12); }
+body.theme-dark .stat-tile-value.positive { color: #8fe3b3; }
+body.theme-dark .stat-tile-value.negative { color: #ffa79e; }

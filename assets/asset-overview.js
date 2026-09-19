@@ -1,4 +1,4 @@
-// Powers asset-summary.html: a Xero-style, portfolio-wide summary — the
+// Powers asset-overview.html: a Xero-style, portfolio-wide summary — the
 // page everyone lands on after logging in — separate from the
 // document/asset pages (dashboard.html "Asset Breakdown", property.html,
 // person.html). Nothing here lets you upload or edit anything; it only

@@ -2,128 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<script>
-// Clickjacking defence-in-depth: GitHub Pages can't send custom HTTP
-// headers (no X-Frame-Options / CSP frame-ancestors is possible), so this
-// page busts out of any frame it's loaded into via JavaScript instead. Not
-// bulletproof against a determined attacker (a sandboxed iframe without
-// allow-top-navigation can suppress the redirect) but stops the common
-// case, and the page stays hidden while framed either way. See the
-// security review for the recommended real fix (a proxy such as
-// Cloudflare in front of the domain, which CAN set these headers).
-(function () {
-  if (window.top !== window.self) {
-    try { window.top.location.href = window.self.location.href; } catch (e) {}
-    document.documentElement.style.display = 'none';
-  }
-})();
-</script>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Asset Summary | Houseago Asset Management</title>
-<meta name="description" content="Private document portal for Houseago Properties Ltd, sole trader and property accounts.">
+<meta http-equiv="refresh" content="0; url=asset-overview.html">
+<title>Redirecting&hellip; | Houseago Asset Management</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#152238">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Asset Management">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300..700;1,300..700&family=Rethink+Sans:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css">
+<script>
+// This page was briefly called Asset Summary before being renamed to
+// Asset Overview (asset-overview.html) — this stub only exists so an
+// old bookmark, browser-autocomplete suggestion, or home-screen
+// shortcut still pointing here lands somewhere real instead of a 404.
+// The <meta refresh> above covers browsers that don't run this script;
+// this covers the (much more common) case where they do, instantly
+// rather than after a flicker.
+window.location.replace('asset-overview.html');
+</script>
 </head>
 <body>
-
-<header class="site-header">
-  <div class="header-inner">
-    <a href="index.html" class="brand">
-      <span class="brand-word"><span class="brand-word-1">Houseago</span><span class="brand-word-2">Asset Management</span></span>
-    </a>
-    <div class="header-actions">
-      <a href="dashboard.html" class="btn btn-outline">Asset Breakdown</a>
-      <a href="security.html" class="btn btn-outline">Security</a>
-      <a href="index.html" class="btn btn-outline" data-portal-logout>Log out</a>
-    </div>
-  </div>
-</header>
-
-<section class="bg-panel" style="padding-top:36px;">
-  <div class="container">
-
-    <div class="portal-topbar">
-      <div class="portal-user">
-        <div class="portal-avatar" id="portal-avatar">A</div>
-        <div>
-          <div style="font-weight:700; color:var(--ink);">Welcome back, <span id="portal-welcome-name">there</span></div>
-          <div style="font-size:0.85rem;" id="portal-user-email"></div>
-        </div>
-      </div>
-      <a href="index.html" class="btn btn-outline" data-portal-logout>Log out</a>
-    </div>
-
-    <div class="section-head left">
-      <p class="eyebrow">Asset Summary</p>
-      <h2>How the portfolio is doing</h2>
-      <p>Income and expenses, plus whether each property's compliance and tenancy paperwork is up to date — pulled together from every property's own page and everyone's Receipts &amp; Invoices. A guide, not a substitute for your accounts. Looking for the documents themselves? See the <a href="dashboard.html" style="font-weight:700; color:var(--navy); text-decoration:underline;">Asset Breakdown</a>.</p>
-    </div>
-
-    <div id="fd-empty" class="entity-card" hidden>
-      <p>Nothing recorded yet. Add income and outgoings on a property's own page, or submit a receipt or invoice, to see a summary here.</p>
-    </div>
-
-    <div id="fd-main" hidden>
-
-      <div class="chart-controls-row" style="margin-bottom:0;">
-        <div class="chart-fy-picker">
-          <label for="fd-fy-select">Financial year</label>
-          <select id="fd-fy-select"></select>
-        </div>
-      </div>
-
-      <div id="fd-stat-tiles" class="stat-tiles"></div>
-
-      <div class="entity-card">
-        <div class="section-head left"><h2>Expenses by category</h2></div>
-        <div id="fd-category-breakdown"></div>
-      </div>
-
-      <div class="entity-card">
-        <div class="section-head left"><h2>By property</h2><p>This financial year, across everything you have access to.</p></div>
-        <div id="fd-property-breakdown" class="income-chart"></div>
-      </div>
-
-      <div class="entity-card">
-        <div class="section-head left"><h2>Income &amp; outgoings by year</h2><p>Every financial year on record, most recent first.</p></div>
-        <div id="fd-trend" class="income-chart"></div>
-      </div>
-
-    </div>
-
-    <div id="fd-compliance-card" class="entity-card" hidden>
-      <div class="section-head left">
-        <h2>Compliance &amp; Tenancy</h2>
-        <p>Whether each property's tracked certificates are in date, and whether its tenancy paperwork (deposit protection and inventory) is on file. Updates automatically as things expire or get renewed — see a property's own page for the detail and to add anything missing.</p>
-      </div>
-      <div id="fd-compliance-list" class="compliance-status"></div>
-    </div>
-
-  </div>
-</section>
-
-<footer class="site-footer">
-  <div class="container">
-    <div class="footer-bottom">
-      <span>&copy; Houseago Asset Management. Private &mdash; not indexed or linked publicly.</span>
-    </div>
-  </div>
-</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="assets/supabase-config.js"></script>
-<script src="assets/pwa.js"></script>
-<script src="assets/asset-summary.js"></script>
+<p>This page has moved. <a href="asset-overview.html">Continue to Asset Overview</a>.</p>
 </body>
 </html>
