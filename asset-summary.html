@@ -19,7 +19,7 @@
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Financial Summary | Houseago Asset Management</title>
+<title>Asset Summary | Houseago Asset Management</title>
 <meta name="description" content="Private document portal for Houseago Properties Ltd, sole trader and property accounts.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -65,9 +65,9 @@
     </div>
 
     <div class="section-head left">
-      <p class="eyebrow">Financial Summary</p>
+      <p class="eyebrow">Asset Summary</p>
       <h2>How the portfolio is doing</h2>
-      <p>Income, expenses, and net profit across every property and account you have access to — pulled together from each property's Income &amp; Outgoings ledger and everyone's Receipts &amp; Invoices. A guide, not a substitute for your accounts. Looking for documents instead? See the <a href="dashboard.html" style="font-weight:700; color:var(--navy); text-decoration:underline;">Asset Overview</a>.</p>
+      <p>Income and expenses, plus whether each property's compliance and tenancy paperwork is up to date — pulled together from every property's own page and everyone's Receipts &amp; Invoices. A guide, not a substitute for your accounts. Looking for the documents themselves? See the <a href="dashboard.html" style="font-weight:700; color:var(--navy); text-decoration:underline;">Asset Overview</a>.</p>
     </div>
 
     <div id="fd-empty" class="entity-card" hidden>
@@ -102,6 +102,14 @@
 
     </div>
 
+    <div id="fd-compliance-card" class="entity-card" hidden>
+      <div class="section-head left">
+        <h2>Compliance &amp; Tenancy</h2>
+        <p>Whether each property's tracked certificates are in date, and whether its tenancy paperwork (deposit protection and inventory) is on file. Updates automatically as things expire or get renewed — see a property's own page for the detail and to add anything missing.</p>
+      </div>
+      <div id="fd-compliance-list" class="compliance-status"></div>
+    </div>
+
   </div>
 </section>
 
@@ -116,6 +124,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/supabase-config.js"></script>
 <script src="assets/pwa.js"></script>
-<script src="assets/financial-dashboard.js"></script>
+<script src="assets/asset-summary.js"></script>
 </body>
 </html>

@@ -1,8 +1,10 @@
-// Powers financial-dashboard.html: a Xero-style, portfolio-wide financial
-// summary — separate from the asset/document pages (dashboard.html,
-// property.html, person.html). Nothing here lets you upload or edit
-// anything; it only totals up what's already been recorded elsewhere:
+// Powers asset-summary.html: a Xero-style, portfolio-wide summary — the
+// page everyone lands on after logging in — separate from the
+// document/asset pages (dashboard.html "Asset Overview", property.html,
+// person.html). Nothing here lets you upload or edit anything; it only
+// totals up and flags what's already been recorded elsewhere:
 //
+//   Financials —
 //   - every property's own "-income" entity (its Income & Outgoings
 //     ledger, entered on property.html — see loadIncomeChart there)
 //   - Houseago Properties Ltd's own income entity (ltd-company-income),
@@ -11,6 +13,14 @@
 //   - every Receipts & Invoices submission (Oscar's, Sally's, and Iris's),
 //     which always counts as an outgoing here, same as it does on each
 //     property's own page
+//
+//   Compliance & Tenancy —
+//   - each property's own "-compliance-tenancy" entity, the same rows
+//     property.html's own compliance status panel reads (see
+//     complianceStatusFor there) — green/amber/red per tracked
+//     certificate, worked out fresh from each one's valid_until date, so
+//     it moves on its own as things approach or pass their renewal date,
+//     with no separate flag to keep updated by hand.
 //
 // Row Level Security quietly limits every query below to whichever of
 // these entities the signed-in viewer actually has access to — this file
@@ -63,6 +73,50 @@
   // person.html — every submission there always counts as an outgoing.
   var RECEIPTS_ENTITY_IDS = ['oscar-receipts-invoices', 'sally-receipts-invoices', 'iris-receipts-invoices'];
 
+  // ---- Compliance & Tenancy summary, one row per property -----------------
+  // Every property that has its own Compliance & Tenancy entity — same five
+  // as INCOME_SOURCES above, but keyed by that entity instead, since 3
+  // Horning Close has no income entity of its own (see INCOME_SOURCES) but
+  // does still have its own Compliance & Tenancy paperwork to track.
+  var COMPLIANCE_PROPERTIES = [
+    { id: '33-north-denes', label: '33 North Denes' },
+    { id: '6-chaucer-street', label: '6 Chaucer Street' },
+    { id: '6a-chaucer-street', label: '6a Chaucer Street' },
+    { id: 'wild-thyme', label: 'Wild Thyme' },
+    { id: '3-horning-close', label: '3 Horning Close' }
+  ];
+  var COMPLIANCE_TENANCY_ENTITY_IDS = COMPLIANCE_PROPERTIES.map(function (p) { return p.id + '-compliance-tenancy'; });
+
+  // Same fixed set as property.js's own COMPLIANCE_TYPES (kept in sync by
+  // hand, same as elsewhere on the site) — split into two groups for this
+  // summary: the four with a genuine renewal date ("Compliance"), and the
+  // three one-off tenancy documents with no fixed renewal ("Tenancy").
+  var COMPLIANCE_GROUP_TYPES = ['gas_safety', 'eicr', 'epc', 'legionella'];
+  var TENANCY_GROUP_TYPES = ['deposit_certificate', 'deposit_prescribed_info', 'inventory'];
+  var EXPIRING_SOON_DAYS = 60;
+
+  function daysUntil(dateStr) {
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var target = new Date(dateStr + 'T00:00:00');
+    return Math.round((target - today) / 86400000);
+  }
+
+  // Same rule as property.js's complianceStatusFor: the most relevant
+  // document for a tracked type (the one with the latest valid_until, or
+  // failing that the most recently added) decides that type's status.
+  function statusForType(docsForType) {
+    if (!docsForType || docsForType.length === 0) return 'missing';
+    var withDate = docsForType.filter(function (d) { return d.valid_until; });
+    var doc = withDate.length > 0
+      ? withDate.sort(function (a, b) { return b.valid_until.localeCompare(a.valid_until); })[0]
+      : docsForType[0];
+    if (!doc.valid_until) return 'undated';
+    var daysLeft = daysUntil(doc.valid_until);
+    if (daysLeft < 0) return 'expired';
+    if (daysLeft <= EXPIRING_SOON_DAYS) return 'soon';
+    return 'valid';
+  }
+
   // ---- UK financial year grouping (6 April - 5 April), same rules as the
   // Receipts & Invoices chart (assets/receipts.js) so the two always agree.
   var FY_MONTH_ORDER = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
@@ -109,6 +163,8 @@
     var trendEl = document.getElementById('fd-trend');
     var emptyEl = document.getElementById('fd-empty');
     var mainEl = document.getElementById('fd-main');
+    var complianceCardEl = document.getElementById('fd-compliance-card');
+    var complianceListEl = document.getElementById('fd-compliance-list');
 
     document.querySelectorAll('[data-portal-logout]').forEach(function (link) {
       link.addEventListener('click', function (e) {
@@ -160,8 +216,64 @@
         if (avatar) avatar.textContent = firstName.charAt(0).toUpperCase();
 
         loadFinancials();
+        loadCompliance();
       });
     });
+
+    function loadCompliance() {
+      if (!complianceCardEl || !complianceListEl) return;
+      // Same two-step shape as auth.js's loadEntities: work out which of
+      // these entities the viewer actually has a portal_access row for
+      // first, so a property they can't see is left off the list entirely
+      // rather than shown as "needs review" with nothing to back it up —
+      // and so a property they CAN see but hasn't uploaded anything for
+      // yet still shows up, correctly, as missing everything.
+      client.from('portal_access').select('entity_id').in('entity_id', COMPLIANCE_TENANCY_ENTITY_IDS)
+        .then(function (accessResult) {
+          var accessibleIds = (accessResult.data || []).map(function (row) { return row.entity_id; });
+          var properties = COMPLIANCE_PROPERTIES.filter(function (p) { return accessibleIds.indexOf(p.id + '-compliance-tenancy') !== -1; });
+          if (properties.length === 0) { complianceCardEl.hidden = true; return; }
+
+          client.from('entity_documents').select('entity_id, compliance_type, valid_until')
+            .in('entity_id', properties.map(function (p) { return p.id + '-compliance-tenancy'; }))
+            .then(function (docsResult) {
+              var docs = (docsResult.data || []).filter(function (d) { return d.compliance_type; });
+
+              complianceListEl.innerHTML = properties.map(function (p) {
+                var entityId = p.id + '-compliance-tenancy';
+                var byType = {};
+                docs.filter(function (d) { return d.entity_id === entityId; }).forEach(function (d) {
+                  (byType[d.compliance_type] = byType[d.compliance_type] || []).push(d);
+                });
+
+                var complianceStatuses = COMPLIANCE_GROUP_TYPES.map(function (t) { return statusForType(byType[t]); });
+                var tenancyStatuses = TENANCY_GROUP_TYPES.map(function (t) { return statusForType(byType[t]); });
+
+                // "Needs review"/"needs completing" the moment anything is
+                // missing, expired, or due within the same 60-day window
+                // property.html's own panel uses — "on file, no date given"
+                // (undated) doesn't trigger a flag, same as there, since a
+                // document does exist, just with nothing to track.
+                var complianceOk = complianceStatuses.every(function (s) { return s === 'valid' || s === 'undated'; });
+                var tenancyOk = tenancyStatuses.every(function (s) { return s === 'valid' || s === 'undated'; });
+
+                return (
+                  '<div class="compliance-row">' +
+                    '<div><div class="compliance-name">' + escapeHtml(p.label) + '</div>' +
+                    '<div class="compliance-hint">Gas safety, EICR, EPC, legionella &middot; deposit protection &amp; inventory</div></div>' +
+                    '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+                      '<span class="status-pill ' + (complianceOk ? 'status-good' : 'status-critical') + '">Compliance: ' + (complianceOk ? 'Fully compliant' : 'Needs review') + '</span>' +
+                      '<span class="status-pill ' + (tenancyOk ? 'status-good' : 'status-warning') + '">Tenancy: ' + (tenancyOk ? 'Complete' : 'Needs completing') + '</span>' +
+                    '</div>' +
+                  '</div>'
+                );
+              }).join('');
+              complianceCardEl.hidden = false;
+            });
+        }).catch(function () {
+          complianceCardEl.hidden = true;
+        });
+    }
 
     function loadFinancials() {
       Promise.all([
@@ -207,7 +319,7 @@
 
         renderPage(rows);
       }).catch(function () {
-        if (mainEl) mainEl.innerHTML = '<div class="entity-card"><p>Could not load your financial summary just now. Please refresh and try again.</p></div>';
+        if (mainEl) mainEl.innerHTML = '<div class="entity-card"><p>Could not load your asset summary just now. Please refresh and try again.</p></div>';
       });
     }
 
