@@ -653,15 +653,20 @@ footer.site-footer a:hover { color: var(--rose); }
   .doc-row-actions { width: 100%; justify-content: space-between; }
 }
 
-/* ---------- Dark theme (Asset Overview, the post-login landing page) -----
-   Applied via <body class="theme-dark">. Every card, pill, button, and
-   form control on the site is already built from these shared design
+/* ---------- Dark theme (every signed-in page) -----------------------------
+   Applied via <body class="theme-dark"> — every signed-in page (Dashboard,
+   Asset Overview, a property's or person's own page, Receipts & Invoices,
+   Security) carries it, so the whole portal reads as one dark, navy
+   experience rather than just the landing page. Every card, pill, button,
+   and form control on the site is already built from these shared design
    tokens (--ink, --ink-soft, --line, --panel, --sandstone, --rose-deep,
    --navy) rather than one-off colours, so redefining the tokens here is
-   enough to make the whole page read correctly on a dark background —
-   only the hardcoded status-pill colours and a couple of hover states
-   need their own rules below, same as .bg-navy already does elsewhere on
-   the site for the same reason. */
+   enough to make most of it read correctly on a dark background — only
+   the hardcoded status-pill colours, a couple of hover states, and a
+   handful of components with their own literal (non-token) colours —
+   document-type icons, tags, form fields, the MFA setup key box, and the
+   chart-bar tooltip — need their own rules below, same as .bg-navy
+   already does elsewhere on the site for the same underlying reason. */
 body.theme-dark {
   --ink: #f5f1ea;
   --ink-soft: rgba(245, 241, 234, 0.74);
@@ -671,6 +676,7 @@ body.theme-dark {
   --rose-deep: #d8b6a8;
   --navy: #d8b6a8;
   background: var(--navy-grad);
+  color-scheme: dark;
 }
 body.theme-dark .bg-panel { background: var(--navy-grad); }
 body.theme-dark .site-header {
@@ -685,3 +691,31 @@ body.theme-dark .status-critical { color: #ffa79e; background: rgba(179, 38, 30,
 body.theme-dark .status-neutral, body.theme-dark .status-missing { color: rgba(255, 255, 255, 0.7); background: rgba(255, 255, 255, 0.12); }
 body.theme-dark .stat-tile-value.positive { color: #8fe3b3; }
 body.theme-dark .stat-tile-value.negative { color: #ffa79e; }
+
+/* Document-type icons, "Type" tags (property.html), and the MFA setup-key
+   box (security.html) all use a literal light-navy tint rather than a
+   token, since it was always meant to read as a subtle recess on a light
+   panel — on a dark panel that same literal colour is nearly invisible,
+   so these get a light tint instead, same idea, flipped. */
+body.theme-dark .doc-row .doc-icon,
+body.theme-dark .tag,
+body.theme-dark .mfa-secret code {
+  background: rgba(255, 255, 255, 0.12);
+}
+/* Form fields (Documents/Income & Outgoings/Receipts upload forms) keep a
+   solid, native-looking field rather than the card's translucent panel
+   tint, so a field is never confused for a static label — just dark
+   instead of light, with border/text following the page tokens as usual. */
+body.theme-dark form.form-card input,
+body.theme-dark form.form-card select,
+body.theme-dark form.form-card textarea {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--line);
+  color: var(--ink);
+}
+body.theme-dark form.form-card input::placeholder { color: rgba(245, 241, 234, 0.4); }
+/* The income/expense bar-chart tooltip (property.html, receipts.html) is
+   deliberately kept dark regardless of theme — a tooltip needs its own
+   contrast against whatever it's floating over — so only its accent
+   colour needs to move off var(--navy) (now a light rose in this theme). */
+body.theme-dark .chart-bar-tooltip { background: #0d1521; }
