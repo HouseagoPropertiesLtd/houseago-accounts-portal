@@ -81,12 +81,37 @@
   // layer (or OCR fallback) for a PDF. Runs once and mines both the date
   // and the amount out of the same pass of text — the engine itself lives
   // in assets/doc-scan.js, this just adapts its result to the
-  // {date, amount} shape the capture flow below already expects.
+  // {date, amount, title, category, text} shape this page uses, keeping
+  // the raw text too so guessReceiptName (below) has something to work
+  // with when the shared category guess comes up empty.
   function scanFileForReceiptFields(fileOrBlob, isPdf, isImage) {
-    if (!fileOrBlob || (!isPdf && !isImage)) return Promise.resolve({ date: null, amount: null, title: null, category: null });
+    if (!fileOrBlob || (!isPdf && !isImage)) return Promise.resolve({ date: null, amount: null, title: null, category: null, text: '' });
     return window.HouseagoDocScan.scanFileForFields(fileOrBlob)
-      .then(function (fields) { return { date: fields.date, amount: fields.amount, title: fields.title, category: fields.category }; })
-      .catch(function () { return { date: null, amount: null, title: null, category: null }; });
+      .then(function (fields) { return { date: fields.date, amount: fields.amount, title: fields.title, category: fields.category, text: fields.text }; })
+      .catch(function () { return { date: null, amount: null, title: null, category: null, text: '' }; });
+  }
+
+  // ---- Guessing a name for the receipt itself -----------------------------
+  // The shared title guess (guessDocType, in doc-scan.js) is a fixed list of
+  // property-expense keywords — "boiler", "insurance", "gas safety" — built
+  // for compliance and expense documents, not for reading the shop or
+  // business name printed on an ordinary receipt or invoice, which it will
+  // usually have nothing to say about. A receipt/invoice's own name is
+  // almost always the business name, printed across the first line or two,
+  // so when the category guess finds nothing, fall back to the first line
+  // of the document's own text that looks like a name rather than a
+  // barcode, a date, or a lone total — not blank, not just digits and
+  // punctuation, and a plausible length for a business name.
+  function guessReceiptName(text) {
+    if (!text) return null;
+    var lines = text.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/\s+/g, ' ').trim();
+      if (line.length < 3 || line.length > 60) continue;
+      if (/^[\d\s.,£$€\-\/:*#]+$/.test(line)) continue; // just numbers/date/amount/punctuation
+      return line;
+    }
+    return null;
   }
 
   // ---- Automatic crop: find roughly where the receipt is in a photo -----
@@ -656,7 +681,7 @@
           onProgress: function (done, total) { fileStatus.textContent = 'Uploading ' + done + ' of ' + total + '…'; },
           buildRow: function (fields, file) {
             return {
-              name: fields.title || file.name.replace(/\.[^.]+$/, ''),
+              name: fields.title || guessReceiptName(fields.text) || file.name.replace(/\.[^.]+$/, ''),
               year: fields.year || thisYear,
               doc_date: fields.date || null,
               amount: fields.amount != null ? Math.round(fields.amount * 100) / 100 : null,
@@ -688,9 +713,10 @@
       } else {
         amountStatus.textContent = "Could not detect an amount automatically — please enter it if known.";
       }
-      if (fields.title && nameInput && !nameInput.value) {
-        nameInput.value = fields.title;
-        trackAutofill(nameInput, fields.title);
+      var guessedName = fields.title || guessReceiptName(fields.text);
+      if (guessedName && nameInput && !nameInput.value) {
+        nameInput.value = guessedName;
+        trackAutofill(nameInput, guessedName);
       }
       if (fields.category && categorySelect && !categorySelect.value) {
         var hasOption = Array.prototype.some.call(categorySelect.options, function (o) { return o.value === fields.category; });
