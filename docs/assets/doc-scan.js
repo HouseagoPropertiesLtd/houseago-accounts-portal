@@ -11,11 +11,11 @@
 // photographed/scanned images) or a PDF's own text layer (via pdf.js), fed
 // through plain keyword and pattern matching to guess a date, an amount, or
 // (for a bank statement) lines that look like rent. Every guess is shown
-// for a person to check, edit, or discard — nothing is saved automatically,
+// for a person to check, edit, or discard - nothing is saved automatically,
 // and nothing about the file itself is stored anywhere, only whatever
 // fields a person chooses to keep.
 //
-// Pages that use this must load pdf.js and Tesseract.js before this file —
+// Pages that use this must load pdf.js and Tesseract.js before this file -
 // see the <script> order in receipts.html, property.html, person.html and
 // dashboard.html.
 
@@ -45,7 +45,7 @@
 
   // Finds the best candidate in `text` among everything `patterns` matched,
   // preferring one that sits shortly after a label from `keywordRegex` (and,
-  // among labels, a longer/more specific one over a generic one) — falling
+  // among labels, a longer/more specific one over a generic one) - falling
   // back to `fallbackCompare` (default: reading order) when no label helps.
   function pickBestCandidate(candidates, text, keywordRegex, opts) {
     opts = opts || {};
@@ -181,7 +181,7 @@
 
   // ---- Expense categories & document-type guessing -------------------------
   // A fixed pick-list rather than free text, kept short and roughly matching
-  // how a UK property tax return groups expenses — shared by every upload
+  // how a UK property tax return groups expenses - shared by every upload
   // point on the site so "Repairs & maintenance" means the same thing
   // wherever it's picked.
   var EXPENSE_CATEGORIES = [
@@ -222,7 +222,7 @@
   // Keyword -> best-guess document title + expense category, checked in
   // order so a more specific match (e.g. "gas safety") wins over a vaguer
   // one further down the list. Every guess here is only ever a starting
-  // point — shown for a person to check, edit, or clear, exactly like the
+  // point - shown for a person to check, edit, or clear, exactly like the
   // date/amount guesses above; nothing is ever assumed to be right.
   var DOC_TYPE_RULES = [
     { re: /garden|landscap|lawn|hedge/i, title: 'Garden Maintenance', category: 'Cleaning & gardening' },
@@ -263,7 +263,7 @@
   // "Income & Outgoings" section) -------------------------------------------
   // A hand-typed ledger entry, or one with a receipt attached, can be
   // either money coming in (rent) or money going out (a gardener, an
-  // insurance renewal) — this is only ever a starting guess for the
+  // insurance renewal) - this is only ever a starting guess for the
   // "Income or outgoing" field, always left changeable.
   var INCOME_TYPE_KEYWORDS = /\brent\b|rental income|tenant payment|deposit received/i;
 
@@ -282,7 +282,7 @@
   }
 
   // Multi-page text layer extraction (falls back to page-1 canvas OCR only
-  // when there's no text layer at all — a scanned image-only PDF beyond
+  // when there's no text layer at all - a scanned image-only PDF beyond
   // page 1 isn't OCR'd, to keep this fast; the "nothing usable found"
   // outcome just means falling back to filling fields in by hand).
   function extractTextFromPdf(file) {
@@ -311,7 +311,7 @@
         var joined = pageTexts.join('\n');
         if (joined.trim().length > 20) return joined;
 
-        // Likely a scanned/image-only PDF with no text layer — render just
+        // Likely a scanned/image-only PDF with no text layer - render just
         // the first page to a canvas and OCR that as a first pass.
         return pdf.getPage(1).then(function (page) {
           var viewport = page.getViewport({ scale: 2 });
@@ -350,7 +350,7 @@
   // Reads whichever fields it can off a file in one pass of text: a date,
   // an amount, a guessed document title + expense category, and a year
   // (preferring the date's own year, falling back to one found in the
-  // text) — all mined from the same extracted text.
+  // text) - all mined from the same extracted text.
   function scanFileForFields(file) {
     return extractTextFromFile(file).then(function (text) {
       var date = parseDateFromText(text);
@@ -405,7 +405,7 @@
   // ---- Duplicate detection --------------------------------------------
   // A SHA-256 of the file's own bytes, stored alongside each upload
   // (entity_documents.file_hash) so the exact same file picked again later
-  // — the same photo re-imported, the same PDF dragged in twice — can be
+  // - the same photo re-imported, the same PDF dragged in twice - can be
   // flagged rather than silently saved a second time. This only ever
   // catches a byte-for-byte match: a rescan, a re-export, or a photo taken
   // a second time of the same receipt will have a different hash and
@@ -426,7 +426,7 @@
   }
 
   // Looks for an existing document on this same entity with the same file
-  // hash — null if there's no match, hashing failed, or the lookup itself
+  // hash - null if there's no match, hashing failed, or the lookup itself
   // failed (never blocks an upload just because the check couldn't run).
   function findDuplicateByHash(client, entityId, hash) {
     if (!client || !hash) return Promise.resolve(null);
@@ -441,7 +441,7 @@
 
   // ---- Bulk upload: several files at once, each becoming its own document
   // Used wherever a "Choose a file" button allows multiple (see
-  // captureFieldHtml's { multiple: true }) — one file at a time (parallel
+  // captureFieldHtml's { multiple: true }) - one file at a time (parallel
   // OCR/uploads are slower and flakier, and a running "3 of 12" count is
   // easier to follow than several finishing out of order), each scanned,
   // checked against this entity's other documents by file hash, and
@@ -453,10 +453,10 @@
   //   client, entityId, session, bucket (default 'owner-documents')
   //   buildRow(fields, file) -> the columns this file's row should have
   //     beyond entity_id/file_path/file_hash/uploaded_by (which this
-  //     function always sets itself) — return a falsy value to skip the
+  //     function always sets itself) - return a falsy value to skip the
   //     file entirely without uploading it (e.g. the ledger skips a file
   //     with no detectable amount rather than create a blank entry).
-  //   onProgress(done, total, file, outcome) — outcome is 'uploaded',
+  //   onProgress(done, total, file, outcome) - outcome is 'uploaded',
   //     'duplicate', 'skipped', or 'failed'.
   function bulkUploadFiles(files, opts) {
     opts = opts || {};
@@ -517,7 +517,7 @@
   }
 
   // One-line summary of a bulkUploadFiles() result, for the status line
-  // under a form after a batch finishes — e.g. "4 uploaded, 1 already
+  // under a form after a batch finishes - e.g. "4 uploaded, 1 already
   // uploaded before (skipped), 2 skipped (nothing usable found)."
   function summarizeBulkResults(results) {
     var bits = [];
@@ -530,14 +530,14 @@
 
   // ---- Reusable "Take a photo / Choose a file" capture widget -----------
   // Drops into any upload form in place of a plain <input type="file">.
-  // Once a file's picked, it's scanned in the background and — only for
+  // Once a file's picked, it's scanned in the background and - only for
   // whichever fields the caller actually points at, and only if they're
-  // still empty — the date and/or amount found are filled in for the
+  // still empty - the date and/or amount found are filled in for the
   // person to check, never overwriting something they've already typed.
   //
   // Pass { multiple: true } to also let "Choose a file" pick several files
   // at once (a camera photo is always one file at a time, so that button
-  // is unaffected) — see wireCaptureField's onMultipleFiles for what
+  // is unaffected) - see wireCaptureField's onMultipleFiles for what
   // happens when more than one file actually gets picked.
   function captureFieldHtml(opts) {
     opts = opts || {};
@@ -560,7 +560,7 @@
     );
   }
 
-  // Finds the option on a year <select> matching a plain "YYYY" guess —
+  // Finds the option on a year <select> matching a plain "YYYY" guess -
   // either exactly, or as the start of a tax-year label like "2025/26".
   function findYearOption(selectEl, year) {
     if (!selectEl || !year) return null;
@@ -580,7 +580,7 @@
   // -> { getFile, reset }
   //
   // Every field named here is filled in automatically from whatever the
-  // scan finds — but only while it's still empty, so nothing a person has
+  // scan finds - but only while it's still empty, so nothing a person has
   // already typed is ever overwritten. A "Clear" button appears once a
   // file's picked, for the case where it turns out to be the wrong
   // document: it drops the file and undoes exactly the fields this scan
@@ -590,7 +590,7 @@
   // document itself is a better source for Income-vs-Outgoing than a
   // live-typed guess from the description alone, so the caller can pass
   // entryTypeOverridable (a function returning true/false) to let a scan
-  // result overwrite that earlier guess — auto-guessed from the document
+  // result overwrite that earlier guess - auto-guessed from the document
   // takes priority over auto-guessed from typing, but neither one is ever
   // allowed to overwrite something the person actually chose by hand.
   //
@@ -598,11 +598,11 @@
   // "Choose a file" was rendered with { multiple: true } (see
   // captureFieldHtml) and more than one file actually gets picked, this
   // widget doesn't try to scan-and-prefill the single set of form fields
-  // (which wouldn't make sense for several different documents at once) —
+  // (which wouldn't make sense for several different documents at once) -
   // it just hands the whole file list to onMultipleFiles and leaves
   // scanning and uploading each one to the caller, since only the caller
   // knows how to save a document (property.js/person.js/auth.js each do
-  // this the same way — see their wireUploadForm's uploadFilesInBulk).
+  // this the same way - see their wireUploadForm's uploadFilesInBulk).
   // Picking exactly one file, even with multiple allowed, still goes
   // through the normal single-file flow below.
   function wireCaptureField(form, opts) {
@@ -631,7 +631,7 @@
       if (!file) return;
       currentFile = file;
       autofilled = [];
-      if (status) status.textContent = file.name + ' — reading…';
+      if (status) status.textContent = file.name + ' - reading…';
       if (clearBtn) clearBtn.hidden = false;
       scanFileForFields(file).then(function (fields) {
         var bits = [file.name];
@@ -644,7 +644,7 @@
         if (opts.entryTypeSelect && fields.entryType && selectHasOption(opts.entryTypeSelect, fields.entryType)) {
           // The document itself is a better source than a live-typed
           // guess from the description alone, so it's allowed to
-          // override that guess — but never something the person
+          // override that guess - but never something the person
           // actually chose by hand (see entryTypeOverridable, set by
           // the caller in property.js/person.js).
           tryFill(opts.entryTypeSelect, fields.entryType, 'income/outgoing guessed, check it’s right', bits, opts.entryTypeOverridable);
@@ -653,14 +653,14 @@
           var yearVal = findYearOption(opts.yearSelect, fields.year);
           if (yearVal) tryFill(opts.yearSelect, yearVal, 'year auto-filled, check it’s right', bits);
         }
-        if (status) status.textContent = bits.join(' — ');
-        // For a caller that needs to react to a field this scan just set —
+        if (status) status.textContent = bits.join(' - ');
+        // For a caller that needs to react to a field this scan just set -
         // property.js/person.js use this to re-run their Income/Outgoing ->
         // expense-category visibility toggle, since a plain .value = ...
         // assignment above never fires a 'change' event on its own.
         if (opts.onScanned) opts.onScanned(fields);
       }).catch(function () {
-        if (status) status.textContent = file.name + ' — could not read it automatically, fill in the fields by hand.';
+        if (status) status.textContent = file.name + ' - could not read it automatically, fill in the fields by hand.';
       });
     }
 

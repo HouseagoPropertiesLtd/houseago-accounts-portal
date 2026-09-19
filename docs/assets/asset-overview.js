@@ -1,12 +1,12 @@
-// Powers asset-overview.html: a Xero-style, portfolio-wide summary — the
-// page everyone lands on after logging in — separate from the
+// Powers asset-overview.html: a Xero-style, portfolio-wide summary - the
+// page everyone lands on after logging in - separate from the
 // document/asset pages (dashboard.html "Asset Overview", property.html,
 // person.html). Nothing here lets you upload or edit anything; it only
 // totals up and flags what's already been recorded elsewhere:
 //
-//   Financials —
+//   Financials -
 //   - every property's own "-income" entity (its Income & Outgoings
-//     ledger, entered on property.html — see loadIncomeChart there)
+//     ledger, entered on property.html - see loadIncomeChart there)
 //   - Houseago Properties Ltd's own income entity (ltd-company-income),
 //     which is where 3 Horning Close's rent goes, since that property is
 //     owned by the Ltd company rather than any one person
@@ -14,16 +14,16 @@
 //     which always counts as an outgoing here, same as it does on each
 //     property's own page
 //
-//   Compliance & Tenancy —
+//   Compliance & Tenancy -
 //   - each property's own "-compliance-tenancy" entity, the same rows
 //     property.html's own compliance status panel reads (see
-//     complianceStatusFor there) — green/amber/red per tracked
+//     complianceStatusFor there) - green/amber/red per tracked
 //     certificate, worked out fresh from each one's valid_until date, so
 //     it moves on its own as things approach or pass their renewal date,
 //     with no separate flag to keep updated by hand.
 //
 // Row Level Security quietly limits every query below to whichever of
-// these entities the signed-in viewer actually has access to — this file
+// these entities the signed-in viewer actually has access to - this file
 // never has to work that out itself; a property or account someone can't
 // see simply contributes nothing to the totals, with no error.
 //
@@ -48,7 +48,7 @@
     return div.innerHTML;
   }
 
-  // escapeHtml alone is only safe for text content — it doesn't touch quote
+  // escapeHtml alone is only safe for text content - it doesn't touch quote
   // characters, so a value from an untrusted source can still break out of
   // a double-quoted HTML attribute like value="..." even after escapeHtml.
   // Use this instead wherever a value lands inside an attribute.
@@ -63,7 +63,7 @@
 
   // Every property with its own Income & Outgoings ledger entity, plus the
   // Ltd company's (which is where 3 Horning Close's rent lives, since it's
-  // company-owned rather than any one person's — see auth.js's
+  // company-owned rather than any one person's - see auth.js's
   // COMPANY_OWNED_PROPERTY_IDS / property.js's NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY
   // for the same distinction made elsewhere on the site).
   var INCOME_SOURCES = [
@@ -78,11 +78,11 @@
   INCOME_SOURCES.forEach(function (s) { LABEL_BY_PROPERTY_ID[s.propertyId] = s.label; });
 
   // Same three Receipts & Invoices entities used across property.html and
-  // person.html — every submission there always counts as an outgoing.
+  // person.html - every submission there always counts as an outgoing.
   var RECEIPTS_ENTITY_IDS = ['oscar-receipts-invoices', 'sally-receipts-invoices', 'iris-receipts-invoices'];
 
   // ---- Compliance & Tenancy summary, one row per property -----------------
-  // Every property that has its own Compliance & Tenancy entity — same five
+  // Every property that has its own Compliance & Tenancy entity - same five
   // as INCOME_SOURCES above, but keyed by that entity instead, since 3
   // Horning Close has no income entity of its own (see INCOME_SOURCES) but
   // does still have its own Compliance & Tenancy paperwork to track.
@@ -96,7 +96,7 @@
   var COMPLIANCE_TENANCY_ENTITY_IDS = COMPLIANCE_PROPERTIES.map(function (p) { return p.id + '-compliance-tenancy'; });
 
   // Same fixed set as property.js's own COMPLIANCE_TYPES (kept in sync by
-  // hand, same as elsewhere on the site) — split into two groups for this
+  // hand, same as elsewhere on the site) - split into two groups for this
   // summary: the four with a genuine renewal date ("Compliance"), and the
   // three one-off tenancy documents with no fixed renewal ("Tenancy").
   var COMPLIANCE_GROUP_TYPES = ['gas_safety', 'eicr', 'epc', 'legionella'];
@@ -157,7 +157,7 @@
     return LABEL_BY_PROPERTY_ID[key] || (key === 'general' ? 'General / Other (not linked to a property)' : key);
   }
 
-  // Same first-name heuristic as assets/auth.js (dashboard.html) — kept as
+  // Same first-name heuristic as assets/auth.js (dashboard.html) - kept as
   // its own small copy here rather than shared, same as every other page.
   function firstNameFor(user) {
     var meta = (user && user.user_metadata) || {};
@@ -200,7 +200,7 @@
       return;
     }
 
-    // 2FA is compulsory across the site (see supabase-schema.sql) — same
+    // 2FA is compulsory across the site (see supabase-schema.sql) - same
     // check as dashboard.html/property.html/person.html, so this page can't
     // be reached by URL alone without it either.
     function ensureAal2() {
@@ -241,7 +241,7 @@
       // Same two-step shape as auth.js's loadEntities: work out which of
       // these entities the viewer actually has a portal_access row for
       // first, so a property they can't see is left off the list entirely
-      // rather than shown as "needs review" with nothing to back it up —
+      // rather than shown as "needs review" with nothing to back it up -
       // and so a property they CAN see but hasn't uploaded anything for
       // yet still shows up, correctly, as missing everything.
       client.from('portal_access').select('entity_id').in('entity_id', COMPLIANCE_TENANCY_ENTITY_IDS)
@@ -267,7 +267,7 @@
 
                 // "Needs review"/"needs completing" the moment anything is
                 // missing, expired, or due within the same 60-day window
-                // property.html's own panel uses — "on file, no date given"
+                // property.html's own panel uses - "on file, no date given"
                 // (undated) doesn't trigger a flag, same as there, since a
                 // document does exist, just with nothing to track.
                 var complianceOk = complianceStatuses.every(function (s) { return s === 'valid' || s === 'undated'; });
@@ -305,7 +305,7 @@
 
         // Normalise everything to one shape: { amount, type, propertyId,
         // category, fy, month }. month is the calendar month (1-12) from
-        // doc_date, used only by the monthly chart below — a row with no
+        // doc_date, used only by the monthly chart below - a row with no
         // doc_date (an older hand-typed entry with just a year) still
         // counts everywhere else on this page, just not in that one chart,
         // since there's no date within the year to place it at.
@@ -381,7 +381,7 @@
           '<div class="stat-tile"><div class="stat-tile-label">Total expenses</div><div class="stat-tile-value negative">' + escapeHtml(formatCurrency(outgoing)) + '</div></div>' +
           '<div class="stat-tile"><div class="stat-tile-label">Net profit</div><div class="stat-tile-value ' + (net >= 0 ? 'positive' : 'negative') + '">' + escapeHtml(formatCurrency(net)) + '</div></div>';
 
-        // Category breakdown, outgoings only — uncategorised grouped at the end.
+        // Category breakdown, outgoings only - uncategorised grouped at the end.
         var catTotals = {};
         yearRows.filter(function (r) { return r.type === 'Outgoing'; }).forEach(function (r) {
           var cat = r.category || 'Uncategorised';
@@ -432,7 +432,7 @@
       // ---- Monthly income & expenses chart -----------------------------
       // Every property/account that appears anywhere in the data (not just
       // the selected financial year), so switching financial year never
-      // makes an option disappear from under someone mid-look — "Whole
+      // makes an option disappear from under someone mid-look - "Whole
       // portfolio" always comes first and is the default.
       if (monthlyChartEl && monthlyAssetSelect) {
         var assetTotals = {};
@@ -455,7 +455,7 @@
         });
 
         // Always 12 columns, April through March, even for months with
-        // nothing recorded — same convention as the Receipts & Invoices
+        // nothing recorded - same convention as the Receipts & Invoices
         // chart (assets/receipts.js), so a gap reads as "nothing that
         // month," not a missing bar.
         var months = FY_MONTH_ORDER.map(function (m) {
@@ -475,7 +475,7 @@
           return;
         }
 
-        // Both series share one £ axis (never a dual-axis chart) — the
+        // Both series share one £ axis (never a dual-axis chart) - the
         // tallest bar of either series, across the whole year, sets the
         // scale for every bar, income and expense alike.
         var maxVal = months.reduce(function (m, mo) { return Math.max(m, mo.income, mo.expense); }, 0);
@@ -483,7 +483,7 @@
         function heightPx(v) { return v > 0 && maxVal > 0 ? Math.max(4, Math.round((v / maxVal) * maxHeight)) : 0; }
 
         // Only the single tallest bar in the whole chart gets a direct
-        // "£X" label (selective direct labels, not one on every bar) —
+        // "£X" label (selective direct labels, not one on every bar) -
         // every bar's exact figure is still available via its tooltip.
         var peak = { month: null, series: null, value: -1 };
         months.forEach(function (mo) {
@@ -516,7 +516,7 @@
             '<span class="chart-legend-item"><span class="chart-legend-swatch chart-legend-expense"></span>Expenses</span>' +
           '</div>' +
           '<div class="chart-wrap">' + barsHtml + '</div><div class="chart-baseline"></div>' +
-          (undated > 0 ? '<p class="chart-empty">' + undated + ' record' + (undated === 1 ? '' : 's') + ' this year ' + (undated === 1 ? 'has' : 'have') + ' no date, so ' + (undated === 1 ? "isn't" : "aren't") + ' shown here — everything else on this page still counts ' + (undated === 1 ? 'it' : 'them') + '.</p>' : '');
+          (undated > 0 ? '<p class="chart-empty">' + undated + ' record' + (undated === 1 ? '' : 's') + ' this year ' + (undated === 1 ? 'has' : 'have') + ' no date, so ' + (undated === 1 ? "isn't" : "aren't") + ' shown here - everything else on this page still counts ' + (undated === 1 ? 'it' : 'them') + '.</p>' : '');
       }
 
       var currentStartYear = years[0].startYear;
@@ -533,7 +533,7 @@
         });
       }
 
-      // Trend across every financial year on record, most recent first —
+      // Trend across every financial year on record, most recent first -
       // the same shape as each property's own Income & Outgoings chart
       // (property.js's loadIncomeChart), just totalled across the whole
       // portfolio rather than one property at a time.

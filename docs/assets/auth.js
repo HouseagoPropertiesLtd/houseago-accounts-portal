@@ -3,18 +3,18 @@
 // has real values in it, so the site never breaks mid-setup (see SETUP.md).
 //
 // Access model: every signed-in user (Oscar, Sally, the accountant) is
-// granted access to one or more "entities" — the Ltd company, a sole
+// granted access to one or more "entities" - the Ltd company, a sole
 // trader account, a property, or one of a property's/person's own
-// sub-sections — via rows in the portal_access table, each with its own
+// sub-sections - via rows in the portal_access table, each with its own
 // can_upload flag. A user only ever sees the entities they've been given a
 // row for, and can only upload into ones where can_upload is true. This is
 // enforced by the database (row level security), not by this file.
 //
 // This file (the dashboard) only lists things directly. A property someone
 // can see the Compliance & Tenancy or Insurance section of becomes a link
-// to property.html?id=<id> instead — see assets/property.js. A person's
+// to property.html?id=<id> instead - see assets/property.js. A person's
 // finances entity (see PEOPLE below) becomes a link to person.html?id=<key>
-// instead — see assets/person.js, which also groups in that person's own
+// instead - see assets/person.js, which also groups in that person's own
 // Receipts & Invoices, and any property someone can only see the Documents
 // and/or Income of (see PROPERTY_OWNERS below). Everything else still
 // renders right here as a flat card (the Ltd company, and similar).
@@ -35,7 +35,7 @@
 
   // Oscar, Sally, and Iris each get a person page (person.html?id=<key>)
   // bundling their general documents with three fixed submission points
-  // (see PERSON_SUFFIXES) — their existing "finances" entity's own id isn't
+  // (see PERSON_SUFFIXES) - their existing "finances" entity's own id isn't
   // uniform enough to derive the others from, hence this small fixed table.
   var PEOPLE = [
     { key: 'oscar', label: 'Oscar', baseEntityId: 'oscar-sole-trader' },
@@ -44,7 +44,7 @@
   ];
 
   // Which person a property is grouped under when someone can't see its
-  // Compliance & Tenancy or Insurance (only its Documents and/or Income) —
+  // Compliance & Tenancy or Insurance (only its Documents and/or Income) -
   // the accountant today, but this is a property of the property, not of
   // any one role: whoever has that shape of access sees it nested inside
   // that person's page (person.html) instead of as its own card here.
@@ -52,10 +52,10 @@
   // page regardless of this table. A property can list more than one
   // person (33 North Denes is jointly Oscar and Sally's).
   //
-  // 3 Horning Close isn't listed here — it's owned by Houseago Properties
+  // 3 Horning Close isn't listed here - it's owned by Houseago Properties
   // Ltd, not any one person, and has no Documents/Income access of its own
   // any more (see COMPANY_OWNED_PROPERTY_IDS below), so it never nests
-  // under a person; it nests under the Ltd company's own page instead —
+  // under a person; it nests under the Ltd company's own page instead -
   // see NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY in assets/property.js.
   var PROPERTY_OWNERS = {
     '33-north-denes': ['oscar', 'sally'],
@@ -89,7 +89,7 @@
   }
 
   // Only needed for the QR-code data: URI in the forced-enrollment step
-  // below — see the matching helper in security.js for why quotes need
+  // below - see the matching helper in security.js for why quotes need
   // escaping there too.
   function escapeAttr(str) {
     return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -114,7 +114,7 @@
     { id: 'epc', label: 'Energy Performance Certificate (EPC)' },
     { id: 'legionella', label: 'Legionella Risk Assessment' },
     { id: 'deposit_certificate', label: 'Deposit Protection Certificate' },
-    { id: 'deposit_prescribed_info', label: 'Deposit — Prescribed Information' },
+    { id: 'deposit_prescribed_info', label: 'Deposit - Prescribed Information' },
     { id: 'inventory', label: 'Inventory / Schedule of Condition' }
   ];
   var EXPIRING_SOON_DAYS = 60; // matches the CP12 early-renewal window, so a due gas cert always shows amber first
@@ -208,16 +208,16 @@
     // Two-factor authentication (TOTP, via Supabase's built-in MFA) is
     // compulsory for every account. A password alone gets a session at
     // "aal1" (assurance level 1); an account with a verified authenticator
-    // app enrolled gets a "next level" of aal2, and that second step — a
-    // 6-digit code — is required immediately, right here, before treating
+    // app enrolled gets a "next level" of aal2, and that second step - a
+    // 6-digit code - is required immediately, right here, before treating
     // the person as actually logged in. An account with NO factor enrolled
     // yet is walked straight into setting one up, also right here, rather
-    // than being allowed to reach the dashboard first — see showEnrollStep
+    // than being allowed to reach the dashboard first - see showEnrollStep
     // below. Nothing here is enforced client-side only: the database
     // itself now refuses to hand back rows (portal_access,
     // entity_documents, Storage) for any account/session that hasn't
-    // actually completed a 2FA challenge — see the "Two-factor
-    // authentication" section of supabase-schema.sql — so neither step can
+    // actually completed a 2FA challenge - see the "Two-factor
+    // authentication" section of supabase-schema.sql - so neither step can
     // be skipped by going straight to dashboard.html either (dashboard.js,
     // property.js and person.js all check this the same way on load and
     // bounce back here if it isn't satisfied yet).
@@ -262,7 +262,7 @@
         }
       }
 
-      // A never-enrolled account doesn't get to see the dashboard at all —
+      // A never-enrolled account doesn't get to see the dashboard at all -
       // 2FA is compulsory, so this starts setup immediately, inline, right
       // after the password step succeeds (or on any later visit while
       // still signed in and still unenrolled). Mirrors security.js's own
@@ -273,7 +273,7 @@
         if (enrollWrap) enrollWrap.hidden = false;
         if (enrollFoot) enrollFoot.hidden = false;
         if (enrollCard) enrollCard.innerHTML = '<p>Setting up&hellip;</p>';
-        // Clear out any abandoned, never-confirmed enrollment first —
+        // Clear out any abandoned, never-confirmed enrollment first -
         // Supabase only allows one unverified TOTP factor (and one of a
         // given friendly name) on an account at a time, so a setup
         // attempt that was never finished (browser closed mid-scan, a
@@ -283,10 +283,10 @@
         // "off" state.
         client.auth.mfa.listFactors().then(function (listResult) {
           // listFactors()'s own grouped .totp array has proven unreliable
-          // here — it can come back empty even when .all correctly lists
+          // here - it can come back empty even when .all correctly lists
           // an unverified TOTP factor (confirmed by hand during testing:
           // same account, same moment, .totp === [] and .all === [that
-          // factor]) — so this reads the type/status off .all directly
+          // factor]) - so this reads the type/status off .all directly
           // rather than trusting the pre-grouped array. Same fix applied
           // everywhere else in the codebase that was doing this cleanup.
           var allFactors = (listResult.data && listResult.data.all) || [];
@@ -309,7 +309,7 @@
         var qr = (factor.totp && factor.totp.qr_code) || '';
         var secret = (factor.totp && factor.totp.secret) || '';
         enrollCard.innerHTML =
-          '<p>Scan this QR code with an authenticator app &mdash; Microsoft Authenticator, Google Authenticator, Authy, 1Password, and similar all work, since this uses the same standard (TOTP) every one of them supports. In Microsoft Authenticator: tap the &ldquo;+&rdquo; to add an account, then &ldquo;Other account&rdquo; (not &ldquo;Work or school account&rdquo;), then scan. Or enter the setup key by hand below if you can’t scan it.</p>' +
+          '<p>Scan this QR code with an authenticator app - Microsoft Authenticator, Google Authenticator, Authy, 1Password, and similar all work, since this uses the same standard (TOTP) every one of them supports. In Microsoft Authenticator: tap the &ldquo;+&rdquo; to add an account, then &ldquo;Other account&rdquo; (not &ldquo;Work or school account&rdquo;), then scan. Or enter the setup key by hand below if you can’t scan it.</p>' +
           '<div class="mfa-qr-wrap">' +
             (qr ? '<img src="' + escapeAttr(qr) + '" alt="QR code for two-factor authentication setup">' : '') +
             '<div class="mfa-secret"><strong>Setup key</strong><br><code>' + escapeHtml(secret) + '</code></div>' +
@@ -345,7 +345,7 @@
       if (enrollCancelLink) {
         enrollCancelLink.addEventListener('click', function (e) {
           e.preventDefault();
-          // Clears the half-finished, never-verified factor first —
+          // Clears the half-finished, never-verified factor first -
           // Supabase only allows one unverified TOTP factor on an account
           // at a time, so leaving it behind would block the next attempt
           // at logging in (same cleanup security.js does for an abandoned
@@ -368,7 +368,7 @@
         ]).then(function (results) {
           var levelsResult = results[0], factorsResult = results[1];
           if (levelsResult.error) {
-            // Fail closed, not open — if we can't tell whether a second
+            // Fail closed, not open - if we can't tell whether a second
             // factor is required, don't assume it isn't.
             if (errorBox) {
               errorBox.textContent = 'Could not verify your login just now. Please try again.';
@@ -471,11 +471,11 @@
         });
       }
 
-      // "Forgot your password?" — swaps the login form for an
+      // "Forgot your password?" - swaps the login form for an
       // email-only form that calls resetPasswordForEmail. Deliberately
       // shows the same success message whether or not the address has an
       // account (Supabase's own behaviour here already avoids leaking
-      // that — see the account-enumeration check in the security review),
+      // that - see the account-enumeration check in the security review),
       // so this never confirms or denies who has a login.
       if (forgotOpenLink && forgotForm) {
         forgotOpenLink.addEventListener('click', function (e) {
@@ -520,23 +520,23 @@
             if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Send reset link'; }
             // Shown on success AND on error (other than a malformed email,
             // which the input's own type="email" validation already
-            // catches) — same reasoning as above, this never reveals
+            // catches) - same reasoning as above, this never reveals
             // whether the address has an account.
             if (forgotSuccess) {
-              forgotSuccess.textContent = 'If ' + email + ' has an account, a password reset link is on its way. The link is valid for a limited time — check your inbox (and spam folder).';
+              forgotSuccess.textContent = 'If ' + email + ' has an account, a password reset link is on its way. The link is valid for a limited time - check your inbox (and spam folder).';
               forgotSuccess.hidden = false;
             }
           }).catch(function () {
             // A rejected promise here (a dropped connection, a browser
             // extension blocking the request, a flaky network) previously
             // left the button stuck on "Sending…" forever with no feedback
-            // at all — indistinguishable, from the person's side, from the
+            // at all - indistinguishable, from the person's side, from the
             // button doing nothing when clicked. Always resolve the button
             // back to a usable state and say something went wrong, so a
             // failed request is visible and retryable rather than silent.
             if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Send reset link'; }
             if (forgotError) {
-              forgotError.textContent = 'Could not send that just now — please check your connection and try again.';
+              forgotError.textContent = 'Could not send that just now - please check your connection and try again.';
               forgotError.hidden = false;
             }
           });
@@ -577,8 +577,8 @@
     }
 
     // 2FA is compulsory. A session that hasn't actually completed a code
-    // challenge — whether the account has never enrolled, or has enrolled
-    // but this particular sign-in only did the password step — has nowhere
+    // challenge - whether the account has never enrolled, or has enrolled
+    // but this particular sign-in only did the password step - has nowhere
     // useful to go on this page (the database would just refuse every
     // query anyway, per supabase-schema.sql), so send it back to
     // index.html, which walks it through whichever of those two steps
@@ -637,14 +637,14 @@
           access.forEach(function (row) { idSet[row.entities.id] = true; });
 
           // A property has full status (its own page, its own card here)
-          // when someone can see its Compliance & Tenancy or Insurance —
+          // when someone can see its Compliance & Tenancy or Insurance -
           // no property names hardcoded anywhere for this, so adding a new
           // property is still just new rows in Supabase (see SETUP.md).
           function hasFullPropertyAccess(id) {
             return !!(idSet[id + '-compliance-tenancy'] || idSet[id + '-insurance']);
           }
           // Someone who can only see a property's Documents and/or Income
-          // (the accountant today) doesn't get a card for it here at all —
+          // (the accountant today) doesn't get a card for it here at all -
           // it's grouped inside PROPERTY_OWNERS[id]'s own page instead (see
           // person.js). If a property isn't listed there, nothing would
           // ever show it to a partial-access viewer, so this still falls
@@ -669,11 +669,11 @@
           }
 
           // 3 Horning Close (see COMPANY_OWNED_PROPERTY_IDS below) has no
-          // Documents/Income access of its own any more — only its
-          // Compliance & Tenancy — which isSatellite above always excludes
+          // Documents/Income access of its own any more - only its
+          // Compliance & Tenancy - which isSatellite above always excludes
           // from topLevel. That's deliberate: it never gets a card (or a
           // page) of its own here at all. It renders nested inside the Ltd
-          // company's own page instead — see
+          // company's own page instead - see
           // NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY in assets/property.js,
           // kept in sync by hand with this file.
           var topLevel = access.filter(function (row) { return !isSatellite(row.entities.id); });
@@ -699,12 +699,12 @@
 
           // Purely visual grouping (Company / Properties / People) with a
           // subtle divider between them, so a long dashboard is easier to
-          // scan — this changes nothing about who can see what, and the
+          // scan - this changes nothing about who can see what, and the
           // order of cards within each group still follows sort_order, same
           // as before. A group with nothing in it is skipped entirely, and
           // if everything a given user has access to falls into a single
-          // group (the accountant, say — no, they get both Company and
-          // People — but a hypothetical single-section user would), no
+          // group (the accountant, say - no, they get both Company and
+          // People - but a hypothetical single-section user would), no
           // heading is shown at all rather than one lonely label.
           //
           // The Ltd company is called out by id rather than inferred: it
@@ -716,12 +716,12 @@
           // from Oscar's point of view, so it gets its own group here.
           var COMPANY_ENTITY_IDS = ['ltd-company'];
           // Reserved for a company-owned property that (unlike 3 Horning
-          // Close) actually has its own Documents/Income access one day —
+          // Close) actually has its own Documents/Income access one day -
           // it would then group under Company here rather than Properties.
           // 3 Horning Close itself never reaches this list in practice: it
           // has no Documents/Income access at all any more, only Compliance
           // & Tenancy, which is always a satellite (isSatellite above) and
-          // so never becomes a topLevel row here — it renders nested inside
+          // so never becomes a topLevel row here - it renders nested inside
           // the Ltd company's own page instead (see
           // NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY in assets/property.js).
           var COMPANY_OWNED_PROPERTY_IDS = [];
@@ -763,7 +763,7 @@
             });
 
           // The "expiring soon" banner covers EVERY accessible document
-          // regardless of which page it's actually managed on — it reads
+          // regardless of which page it's actually managed on - it reads
           // straight from the unfiltered query below, not from this list.
           loadDocuments(inlineIds, uploadableIds, session, namesById);
           inlineIds.forEach(function (id) {
@@ -898,7 +898,7 @@
             (result.data || []).forEach(function (doc) {
               if (byEntity[doc.entity_id]) byEntity[doc.entity_id].push(doc);
             });
-            // Deliberately independent of entityIds/byEntity above — this
+            // Deliberately independent of entityIds/byEntity above - this
             // reads every document this user can see (RLS-scoped), whether
             // it's rendered inline on this page or lives on property.html /
             // person.html, so the banner is always complete.
@@ -944,9 +944,9 @@
 
     var bannerDismissed = false;
 
-    // Self Assessment's two fixed HMRC deadlines — 31 January (the previous
+    // Self Assessment's two fixed HMRC deadlines - 31 January (the previous
     // tax year's balancing payment, plus any first payment on account for
-    // the current year) and 31 July (the second payment on account) — shown
+    // the current year) and 31 July (the second payment on account) - shown
     // in the same banner as document expiries, but keyed to the calendar
     // rather than to anything uploaded. Always the NEXT upcoming occurrence
     // of each: once 31 January has passed, it jumps straight to next year's.
@@ -1083,7 +1083,7 @@
         status.textContent = '';
 
         function doUpload(hash) {
-          // Every document ends up stored as a PDF, whatever was picked —
+          // Every document ends up stored as a PDF, whatever was picked -
           // an image gets wrapped into one, a PDF is left as-is.
           window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
             var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
@@ -1128,7 +1128,7 @@
             if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Upload it again anyway?')) {
               submitBtn.disabled = false;
               submitBtn.textContent = 'Upload document';
-              status.textContent = 'Not uploaded — already on file.';
+              status.textContent = 'Not uploaded - already on file.';
               return;
             }
             doUpload(hash);

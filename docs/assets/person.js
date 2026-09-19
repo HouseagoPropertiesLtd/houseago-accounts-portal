@@ -1,12 +1,12 @@
 // Powers person.html: one person's General Documents, Bank Statements (by
 // tax year), Investment & Dividend Returns, Employment (Payslips), and
-// their own Receipts & Invoices, plus — for someone who can't see a
-// property's Compliance & Tenancy or Insurance (the accountant today) —
+// their own Receipts & Invoices, plus - for someone who can't see a
+// property's Compliance & Tenancy or Insurance (the accountant today) -
 // that property's Documents and Income & Outgoings, grouped in here
 // instead of getting their own card on the dashboard (see PROPERTY_OWNERS
 // below and the matching table in assets/auth.js, kept in sync by hand).
 // Which person is driven by the "?id=" query string, matching one of the
-// three keys in PEOPLE below — this table (unlike properties) is small and
+// three keys in PEOPLE below - this table (unlike properties) is small and
 // fixed on purpose, since a person's existing "finances" entity id (see
 // baseEntityId) predates this page and isn't uniform enough to derive the
 // others from automatically.
@@ -33,9 +33,9 @@
   ];
 
   // Which properties group under this person for someone who can't see
-  // their Compliance & Tenancy or Insurance sections — kept in sync by
+  // their Compliance & Tenancy or Insurance sections - kept in sync by
   // hand with the same table in assets/auth.js. 3 Horning Close isn't
-  // listed for anyone here — it's owned by Houseago Properties Ltd, not a
+  // listed for anyone here - it's owned by Houseago Properties Ltd, not a
   // person, and nests under the Ltd company's own page instead (see
   // NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY in assets/property.js).
   var PROPERTIES_BY_PERSON = {
@@ -44,7 +44,7 @@
     iris: ['6-chaucer-street', '6a-chaucer-street']
   };
 
-  // Every person has their own Receipts & Invoices entity — outgoings for
+  // Every person has their own Receipts & Invoices entity - outgoings for
   // a nested property's Income & Outgoings are read across all three,
   // filtered to whichever submissions were linked to it (same idea as
   // property.js's own income chart).
@@ -56,7 +56,7 @@
     return div.innerHTML;
   }
 
-  // escapeHtml alone is only safe for text content — it doesn't touch quote
+  // escapeHtml alone is only safe for text content - it doesn't touch quote
   // characters, so a value from an untrusted source (a bank-statement scan
   // candidate, a document's year) can still break out of a double-quoted
   // HTML attribute like value="..." even after escapeHtml. Use this instead
@@ -78,7 +78,7 @@
   }
 
   // UK tax year runs 6 April to 5 April, same cycle used for the financial
-  // year on receipts.html — so "2025/26" here means 6 Apr 2025-5 Apr 2026.
+  // year on receipts.html - so "2025/26" here means 6 Apr 2025-5 Apr 2026.
   function currentTaxYearStart() {
     var now = new Date();
     var y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate();
@@ -137,7 +137,7 @@
       return;
     }
 
-    // 2FA is compulsory (see supabase-schema.sql) — a session that hasn't
+    // 2FA is compulsory (see supabase-schema.sql) - a session that hasn't
     // completed a code challenge (never enrolled, or enrolled but not
     // challenged this sign-in) is sent back to index.html to sort that out
     // first, same check as dashboard.js/property.js, so reaching this page
@@ -167,7 +167,7 @@
 
     function subEntitiesFor(person) {
       return [
-        { id: person.baseEntityId, label: 'General Documents', taxYear: false, desc: 'Anything that doesn’t belong in one of the specific sections below — Self Assessment returns, sole trader accounts, and other financial documents included, not just non-financial paperwork.' },
+        { id: person.baseEntityId, label: 'General Documents', taxYear: false, desc: 'Anything that doesn’t belong in one of the specific sections below - Self Assessment returns, sole trader accounts, and other financial documents included, not just non-financial paperwork.' },
         { id: person.key + '-bank-statements', label: 'Bank Statements', taxYear: true },
         { id: person.key + '-investment-dividends', label: 'Investment & Dividend Returns', taxYear: false },
         { id: person.key + '-employment-payslips', label: 'Employment (Payslips)', taxYear: false }
@@ -281,7 +281,7 @@
       );
     }
 
-    // --- Nested properties (Documents + Income & Outgoings only — no
+    // --- Nested properties (Documents + Income & Outgoings only - no
     // Compliance & Tenancy or Insurance ever renders here; someone who can
     // see those gets the property's own page from the dashboard instead,
     // see assets/auth.js) -------------------------------------------------
@@ -290,15 +290,15 @@
       var hasDocs = accessById.hasOwnProperty(pid);
       var hasIncome = accessById.hasOwnProperty(pid + '-income');
       var html = '';
-      // Income & Outgoings first, so the financial ledger sits near the top —
+      // Income & Outgoings first, so the financial ledger sits near the top -
       // same ordering as a property's own standalone page (property.js).
       if (hasIncome) {
         var incomeId = pid + '-income';
         var canAddIncome = !!accessById[incomeId];
         html +=
           '<div class="entity-card">' +
-            '<div class="section-head left"><h2>' + escapeHtml(name) + ' &mdash; Income &amp; Outgoings</h2></div>' +
-            '<p>A running total of rent received and money spent on this property — not a place to file documents. Most entries here are just a description, an amount, a date, and whether it&rsquo;s income or an outgoing.</p>' +
+            '<div class="section-head left"><h2>' + escapeHtml(name) + ' - Income &amp; Outgoings</h2></div>' +
+            '<p>A running total of rent received and money spent on this property - not a place to file documents. Most entries here are just a description, an amount, a date, and whether it&rsquo;s income or an outgoing.</p>' +
             '<div class="income-chart" data-income-chart="' + incomeId + '"></div>' +
             '<div class="year-filter-row" data-year-filter="' + incomeId + '" hidden>' +
               '<label for="year-select-' + incomeId + '">Year</label>' +
@@ -312,8 +312,8 @@
         var canUpload = !!accessById[pid];
         html +=
           '<div class="entity-card">' +
-            '<div class="section-head left"><h2>' + escapeHtml(name) + ' &mdash; Documents</h2></div>' +
-            '<p>General paperwork for this property — financial documents included, not just non-financial paperwork. For rent and other income, see Income &amp; Outgoings above.</p>' +
+            '<div class="section-head left"><h2>' + escapeHtml(name) + ' - Documents</h2></div>' +
+            '<p>General paperwork for this property - financial documents included, not just non-financial paperwork. For rent and other income, see Income &amp; Outgoings above.</p>' +
             '<div class="year-filter-row" data-year-filter="' + pid + '" hidden>' +
               '<label for="year-select-' + pid + '">Year</label>' +
               '<select id="year-select-' + pid + '" data-year-select></select>' +
@@ -356,7 +356,7 @@
       );
     }
 
-    // A receipt attached here is optional — see the matching note in
+    // A receipt attached here is optional - see the matching note in
     // assets/property.js's own copy of this form, which this mirrors.
     function wireIncomeEntryForm(entityId, session, person) {
       var form = sectionsEl.querySelector('[data-income-entity="' + entityId + '"]');
@@ -376,7 +376,7 @@
         categoryFieldWrap.hidden = entryTypeSelect.value !== 'Outgoing';
       }
 
-      // Several receipts at once, each becoming its own ledger entry — a
+      // Several receipts at once, each becoming its own ledger entry - a
       // file with no amount detectable on it is skipped rather than
       // creating a blank entry, since there'd be nothing sensible to add.
       function handleBulkFiles(files) {
@@ -410,7 +410,7 @@
 
       // Tracks whether the current Income/Outgoing value is one the person
       // actually chose from the dropdown, as opposed to a guess (typed or
-      // scanned) — only a real dropdown selection fires 'change' here,
+      // scanned) - only a real dropdown selection fires 'change' here,
       // since every guess below sets .value directly. Once true, no guess
       // is ever allowed to overwrite it again.
       var entryTypeManuallySet = false;
@@ -440,13 +440,13 @@
         amountInput: form.querySelector('input[name="amount"]'),
         // The Description field doubles as this form's document title, so
         // it gets the same auto-fill every other upload form on the site
-        // gets ("Gardener", "Cleaning", etc.) — only while still empty,
+        // gets ("Gardener", "Cleaning", etc.) - only while still empty,
         // same as everywhere else.
         nameInput: nameInput,
         entryTypeSelect: entryTypeSelect,
         // The document itself is a better source than a guess typed from
         // the description alone, so a scan result is allowed to override
-        // that earlier guess — just never a choice the person made by hand.
+        // that earlier guess - just never a choice the person made by hand.
         entryTypeOverridable: function () { return !entryTypeManuallySet; },
         onScanned: syncCategoryVisibility,
         categorySelect: categorySelect,
@@ -517,7 +517,7 @@
           window.HouseagoDocScan.findDuplicateByHash(client, entityId, hash).then(function (existing) {
             if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Add it again anyway?')) {
               if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add entry'; }
-              status.textContent = 'Not added — already on file.';
+              status.textContent = 'Not added - already on file.';
               return;
             }
             doUpload(hash);
@@ -527,7 +527,7 @@
     }
 
     // Same first-pass bank statement scan as property.html's own Income &
-    // Outgoings section (see assets/property.js) — the actual OCR/PDF text
+    // Outgoings section (see assets/property.js) - the actual OCR/PDF text
     // reading and rent-line matching lives in assets/doc-scan.js, shared by
     // both, so a nested property here gets exactly the same tool a
     // full-access owner gets on that property's own page.
@@ -535,7 +535,7 @@
       return (
         '<div class="form-card statement-scan" data-statement-scan="' + entityId + '">' +
           '<div class="section-subhead">Or scan a bank statement for rent payments</div>' +
-          '<p>Upload a bank statement (PDF or photo) and this looks for lines mentioning &ldquo;rent&rdquo; alongside an amount, so you can add them as income entries without retyping every line. It is a first pass, not a real bank-statement reader — every suggestion is shown for you to check, edit, or discard before anything is saved, and nothing here reads or stores the statement itself, only what you choose to add below.</p>' +
+          '<p>Upload a bank statement (PDF or photo) and this looks for lines mentioning &ldquo;rent&rdquo; alongside an amount, so you can add them as income entries without retyping every line. It is a first pass, not a real bank-statement reader - every suggestion is shown for you to check, edit, or discard before anything is saved, and nothing here reads or stores the statement itself, only what you choose to add below.</p>' +
           '<input type="file" accept="application/pdf,image/*" data-scan-file>' +
           '<p class="form-status" role="status" data-scan-status></p>' +
           '<div data-scan-results></div>' +
@@ -559,10 +559,10 @@
         window.HouseagoDocScan.extractTextFromFile(file).then(function (text) {
           var candidates = window.HouseagoDocScan.extractLikelyIncomeLines(text);
           if (candidates.length === 0) {
-            status.textContent = 'No likely rent lines found — you can still add entries by hand below, or try a clearer copy of the statement.';
+            status.textContent = 'No likely rent lines found - you can still add entries by hand below, or try a clearer copy of the statement.';
             return;
           }
-          status.textContent = 'Found ' + candidates.length + ' possible rent line' + (candidates.length === 1 ? '' : 's') + ' — check each one, then add what looks right.';
+          status.textContent = 'Found ' + candidates.length + ' possible rent line' + (candidates.length === 1 ? '' : 's') + ' - check each one, then add what looks right.';
           results.innerHTML = candidates.map(function (c, i) {
             return (
               '<div class="scan-candidate" data-candidate="' + i + '">' +
@@ -613,7 +613,7 @@
         client.from('entity_documents').select('amount, doc_date, year, entry_type').eq('entity_id', entityId),
         client.from('entity_documents').select('amount, doc_date, year').in('entity_id', RECEIPTS_ENTITY_IDS).eq('related_entity_id', propertyId)
       ]).then(function (results) {
-        // See the matching note in property.js's own copy of this chart —
+        // See the matching note in property.js's own copy of this chart -
         // an older row with no entry_type set is treated as Income.
         var ownRows = (results[0].data || []).filter(function (d) { return d.amount != null; });
         var income = ownRows.filter(function (d) { return d.entry_type !== 'Outgoing'; });
@@ -650,7 +650,7 @@
 
     // --- Tax year pack -------------------------------------------------
     // Note: a Bank Statement's Year is a tax year label like "2025/26" while
-    // every other section here uses a plain calendar year like "2026" — the
+    // every other section here uses a plain calendar year like "2026" - the
     // pack's Year dropdown lists whichever labels actually exist and bundles
     // an exact match, so picking "2025/26" only pulls in Bank Statements
     // (the only section that uses that label), and picking "2026" pulls in
@@ -660,7 +660,7 @@
       return (
         '<div class="entity-card tax-year-pack" data-pack-container>' +
           '<div class="section-head left"><h2>Tax year pack</h2></div>' +
-          '<p>Bundle every document filed anywhere on this page under one year label into a single zip, ready to send to your accountant. Bank Statements are labelled by tax year (e.g. &ldquo;2025/26&rdquo;); everything else by calendar year — pick both if you need a full tax year including statements.</p>' +
+          '<p>Bundle every document filed anywhere on this page under one year label into a single zip, ready to send to your accountant. Bank Statements are labelled by tax year (e.g. &ldquo;2025/26&rdquo;); everything else by calendar year - pick both if you need a full tax year including statements.</p>' +
           '<div class="form-grid-2">' +
             '<div><label>Year</label><select data-pack-year><option value="">Loading years&hellip;</option></select></div>' +
             '<div class="pack-download-wrap"><button type="button" class="btn btn-primary" data-pack-download disabled>Download tax year pack</button></div>' +
@@ -692,7 +692,7 @@
       downloadBtn.addEventListener('click', function () {
         var year = yearSelect.value;
         if (!year) { status.textContent = 'Pick a year first.'; return; }
-        if (typeof JSZip === 'undefined') { status.textContent = 'Could not build the pack right now — please refresh and try again.'; return; }
+        if (typeof JSZip === 'undefined') { status.textContent = 'Could not build the pack right now - please refresh and try again.'; return; }
 
         downloadBtn.disabled = true;
         status.textContent = 'Building pack…';
@@ -968,7 +968,7 @@
             if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Upload it again anyway?')) {
               submitBtn.disabled = false;
               submitBtn.textContent = 'Upload document';
-              status.textContent = 'Not uploaded — already on file.';
+              status.textContent = 'Not uploaded - already on file.';
               return;
             }
             doUpload(hash);

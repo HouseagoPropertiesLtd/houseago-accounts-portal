@@ -1,4 +1,4 @@
-// This portal's own Supabase project — kept completely separate from the
+// This portal's own Supabase project - kept completely separate from the
 // Houseago Properties Ltd tenant portal's project, since this one holds
 // company/personal financial documents.
 //

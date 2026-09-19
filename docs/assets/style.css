@@ -18,7 +18,7 @@
   --radius: 4px;
   --navy-grad: linear-gradient(135deg, #0d1521 0%, #24375b 100%);
   --rose-grad: linear-gradient(135deg, #7b3f34 0%, #c4a296 100%);
-  /* Income/expense pair for the monthly chart — computed with the dataviz
+  /* Income/expense pair for the monthly chart - computed with the dataviz
      skill's validate_palette.js (colorblind-safe, checked against this
      surface) rather than picked by eye; the dark-mode pair below is a
      separate, independently-validated pair against the dark surface, not an
@@ -648,7 +648,7 @@ form.form-card select {
 .chart-baseline { border-top: 1px solid var(--line); margin-top: 0; }
 .chart-empty { color: var(--ink-soft); font-size: 0.9rem; }
 
-/* Two-series (income/expense) legend — always shown alongside the grouped
+/* Two-series (income/expense) legend - always shown alongside the grouped
    monthly chart, per the dataviz skill's rule that colour never stands
    alone as the only way to tell series apart. */
 .chart-legend { display: flex; gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -699,18 +699,18 @@ footer.site-footer a:hover { color: var(--rose); }
 }
 
 /* ---------- Dark theme (every signed-in page) -----------------------------
-   Applied via <body class="theme-dark"> — every signed-in page (Dashboard,
+   Applied via <body class="theme-dark"> - every signed-in page (Dashboard,
    Asset Overview, a property's or person's own page, Receipts & Invoices,
    Security) carries it, so the whole portal reads as one dark, navy
    experience rather than just the landing page. Every card, pill, button,
    and form control on the site is already built from these shared design
    tokens (--ink, --ink-soft, --line, --panel, --sandstone, --rose-deep,
    --navy) rather than one-off colours, so redefining the tokens here is
-   enough to make most of it read correctly on a dark background — only
+   enough to make most of it read correctly on a dark background - only
    the hardcoded status-pill colours, a couple of hover states, and a
-   handful of components with their own literal (non-token) colours —
+   handful of components with their own literal (non-token) colours -
    document-type icons, tags, form fields, the MFA setup key box, and the
-   chart-bar tooltip — need their own rules below, same as .bg-navy
+   chart-bar tooltip - need their own rules below, same as .bg-navy
    already does elsewhere on the site for the same underlying reason. */
 body.theme-dark {
   --ink: #f5f1ea;
@@ -740,7 +740,7 @@ body.theme-dark .stat-tile-value.negative { color: #ffa79e; }
 /* Document-type icons, "Type" tags (property.html), and the MFA setup-key
    box (security.html) all use a literal light-navy tint rather than a
    token, since it was always meant to read as a subtle recess on a light
-   panel — on a dark panel that same literal colour is nearly invisible,
+   panel - on a dark panel that same literal colour is nearly invisible,
    so these get a light tint instead, same idea, flipped. */
 body.theme-dark .doc-row .doc-icon,
 body.theme-dark .tag,
@@ -749,7 +749,7 @@ body.theme-dark .mfa-secret code {
 }
 /* Form fields (Documents/Income & Outgoings/Receipts upload forms) keep a
    solid, native-looking field rather than the card's translucent panel
-   tint, so a field is never confused for a static label — just dark
+   tint, so a field is never confused for a static label - just dark
    instead of light, with border/text following the page tokens as usual. */
 body.theme-dark form.form-card input,
 body.theme-dark form.form-card select,
@@ -760,13 +760,13 @@ body.theme-dark form.form-card textarea {
 }
 body.theme-dark form.form-card input::placeholder { color: rgba(245, 241, 234, 0.4); }
 /* The income/expense bar-chart tooltip (property.html, receipts.html) is
-   deliberately kept dark regardless of theme — a tooltip needs its own
-   contrast against whatever it's floating over — so only its accent
+   deliberately kept dark regardless of theme - a tooltip needs its own
+   contrast against whatever it's floating over - so only its accent
    colour needs to move off var(--navy) (now a light rose in this theme). */
 body.theme-dark .chart-bar-tooltip { background: #0d1521; }
 
 /* .btn-primary is normally the navy gradient, which is exactly the page's
-   own background colour on a dark-theme page — so on these pages it needs
+   own background colour on a dark-theme page - so on these pages it needs
    a distinct accent instead. Uses the brand book's dusk pink (--rose) with
    dark navy text (contrast ratio ~7.2:1, comfortably AA/AAA); hover is a
    slightly deeper shade of the same pink, not the unrelated --rose-deep

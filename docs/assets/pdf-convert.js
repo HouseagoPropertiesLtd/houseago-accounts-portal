@@ -1,5 +1,5 @@
-// Every upload in this portal — whether it's a photographed receipt, a
-// file picked from the device, or a document added on the dashboard — ends
+// Every upload in this portal - whether it's a photographed receipt, a
+// file picked from the device, or a document added on the dashboard - ends
 // up stored as a PDF, so the document store stays consistent regardless of
 // what was originally supplied. A file that's already a PDF is left
 // untouched; an image gets wrapped into a single-page PDF sized to match
@@ -47,7 +47,7 @@ window.HouseagoPdfConvert = (function () {
 
   // Given { blob, name, type }, returns a Promise of { blob, name, type }:
   // a PDF version if the input was an image and conversion worked,
-  // otherwise the original, untouched — so a missing library, an odd file,
+  // otherwise the original, untouched - so a missing library, an odd file,
   // or a non-image document never blocks an upload.
   function toPdfIfImage(uploadFile) {
     if (!uploadFile || !/^image\//.test(uploadFile.type || '')) return Promise.resolve(uploadFile);

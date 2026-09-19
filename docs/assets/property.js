@@ -1,14 +1,14 @@
 // Powers property.html: one property's Documents (general paperwork,
 // compliance certificates, and insurance, all pooled into one list with a
-// Type tag) and its Income & Outgoings ledger, all on one page — just two
+// Type tag) and its Income & Outgoings ledger, all on one page - just two
 // upload points, kept simple on purpose. Which property is entirely driven
-// by the "?id=" query string — e.g. property.html?id=33-north-denes —
+// by the "?id=" query string - e.g. property.html?id=33-north-denes -
 // matching that entity's own id, so adding a brand new property is still
 // just rows in Supabase (see SETUP.md); nothing here hardcodes a
 // property's name or id.
 //
 // Under the hood, Documents/Compliance & Tenancy/Insurance stay three
-// separate database entities with their own access rows — that's what lets
+// separate database entities with their own access rows - that's what lets
 // someone (the accountant, say) be granted the general Documents and
 // Income & Outgoings but excluded from Compliance & Tenancy and Insurance
 // entirely. Only the on-page presentation merges them into one card; a
@@ -36,7 +36,7 @@
     return div.innerHTML;
   }
 
-  // escapeHtml alone is only safe for text content — it doesn't touch quote
+  // escapeHtml alone is only safe for text content - it doesn't touch quote
   // characters, so a value from an untrusted source (a bank-statement scan
   // candidate, a document's year) can still break out of a double-quoted
   // HTML attribute like value="..." even after escapeHtml. Use this instead
@@ -63,7 +63,7 @@
   // have a genuine renewal date and get the full green/amber/red tracking
   // below; the last three (deposit certificate, prescribed information,
   // inventory) are one-off paperwork issued at the start of a tenancy with
-  // no fixed renewal — tagging them here just gives them their own place
+  // no fixed renewal - tagging them here just gives them their own place
   // in the Type dropdown and the status panel below shows them as "On
   // file" or "Not on file yet" rather than a real expiry countdown.
   var COMPLIANCE_TYPES = [
@@ -72,7 +72,7 @@
     { id: 'epc', label: 'Energy Performance Certificate (EPC)', hint: 'valid for 10 years' },
     { id: 'legionella', label: 'Legionella Risk Assessment', hint: 'review at least every 2 years' },
     { id: 'deposit_certificate', label: 'Deposit Protection Certificate', hint: 'issued once per tenancy, no fixed renewal' },
-    { id: 'deposit_prescribed_info', label: 'Deposit — Prescribed Information', hint: 'issued once per tenancy, no fixed renewal' },
+    { id: 'deposit_prescribed_info', label: 'Deposit - Prescribed Information', hint: 'issued once per tenancy, no fixed renewal' },
     { id: 'inventory', label: 'Inventory / Schedule of Condition', hint: 'done at the start (and end) of each tenancy, no fixed renewal' }
   ];
   var EXPIRING_SOON_DAYS = 60;
@@ -118,7 +118,7 @@
     return match ? match.label : null;
   }
 
-  // Which underlying entity a merged Documents-card row actually came from —
+  // Which underlying entity a merged Documents-card row actually came from -
   // shown as a "Type" tag so the merge doesn't hide where something lives.
   function docTypeLabel(entityId) {
     if (/-compliance-tenancy$/.test(entityId)) return 'Compliance & Tenancy';
@@ -126,7 +126,7 @@
     return 'General';
   }
 
-  // Every entity id used on this page is "<propertyId><suffix>" — strip the
+  // Every entity id used on this page is "<propertyId><suffix>" - strip the
   // known suffixes to get back to the property id, e.g. for reloading the
   // whole page after a delete.
   function basePropertyId(entityId) {
@@ -169,7 +169,7 @@
       return;
     }
 
-    // 2FA is compulsory (see supabase-schema.sql) — a session that hasn't
+    // 2FA is compulsory (see supabase-schema.sql) - a session that hasn't
     // completed a code challenge (never enrolled, or enrolled but not
     // challenged this sign-in) is sent back to index.html to sort that out
     // first, same check as dashboard.js/person.js, so reaching this page
@@ -198,7 +198,7 @@
     });
 
     // The three document-type entities (merged into one "Documents" card on
-    // screen) plus the income ledger. Kept as separate database entities —
+    // screen) plus the income ledger. Kept as separate database entities -
     // see the file header comment for why.
     var SUB_ENTITIES = [
       { suffix: '', label: 'General', kind: 'plain' },
@@ -210,13 +210,13 @@
     var INCOME_SUB = SUB_ENTITIES.filter(function (s) { return s.kind === 'income'; })[0];
 
     // A company-owned property (3 Horning Close) has no Documents/Income
-    // access of its own any more — its rent and expenses are tracked as
+    // access of its own any more - its rent and expenses are tracked as
     // Houseago Properties Ltd's own business income (see
     // ltd-company-income), not as a separate per-property ledger, and it
     // never gets its own dashboard card or page (see assets/auth.js). Only
     // its Compliance & Tenancy still exists as a distinct section, and it
     // renders nested right here, inside the owning company entity's own
-    // page — the same idea as person.js nesting a partial-access property
+    // page - the same idea as person.js nesting a partial-access property
     // inside a person's page, just one level up. Kept in sync by hand with
     // COMPANY_OWNED_PROPERTY_IDS/PROPERTY_OWNERS in assets/auth.js.
     var NESTED_COMPLIANCE_PROPERTIES_BY_COMPANY = {
@@ -277,11 +277,11 @@
 
         // Income & Outgoings before Documents: the financial ledger sits
         // right near the top, not buried under everything else. The tax
-        // year pack stays a single card at the very top of the page —
+        // year pack stays a single card at the very top of the page -
         // nested properties don't get one of their own; whatever they
         // file is still covered by this page's own pack (see visibleIds
         // below). Receipts & Invoices linked to this page sits right at
-        // the bottom — this page's own property, not the nested one, so
+        // the bottom - this page's own property, not the nested one, so
         // it's excluded there entirely.
         sectionsEl.innerHTML = packHtml + incomeHtml + documentsHtml + nestedHtml + linkedReceiptsCardHtml(propertyId);
 
@@ -317,7 +317,7 @@
       return (
         '<div class="entity-card tax-year-pack" data-pack-container>' +
           '<div class="section-head left"><h2>Tax year pack</h2></div>' +
-          '<p>Bundle every document filed anywhere on this page for one year — Documents (general, compliance, and insurance) and Income &amp; Outgoings — into a single zip, ready to send to your accountant.</p>' +
+          '<p>Bundle every document filed anywhere on this page for one year - Documents (general, compliance, and insurance) and Income &amp; Outgoings - into a single zip, ready to send to your accountant.</p>' +
           '<div class="form-grid-2">' +
             '<div><label>Year</label><select data-pack-year><option value="">Loading years&hellip;</option></select></div>' +
             '<div class="pack-download-wrap"><button type="button" class="btn btn-primary" data-pack-download disabled>Download tax year pack</button></div>' +
@@ -349,7 +349,7 @@
       downloadBtn.addEventListener('click', function () {
         var year = yearSelect.value;
         if (!year) { status.textContent = 'Pick a year first.'; return; }
-        if (typeof JSZip === 'undefined') { status.textContent = 'Could not build the pack right now — please refresh and try again.'; return; }
+        if (typeof JSZip === 'undefined') { status.textContent = 'Could not build the pack right now - please refresh and try again.'; return; }
 
         downloadBtn.disabled = true;
         status.textContent = 'Building pack…';
@@ -403,7 +403,7 @@
       return (
         '<div class="entity-card">' +
           '<div class="section-head left"><h2>Documents</h2></div>' +
-          '<p>Everything filed for this property in one place — the purchase contract, a mortgage statement, tenancy paperwork, compliance certificates, insurance policies, correspondence, or anything else (financial documents belong here too — it isn’t just non-financial paperwork). Records of rent live separately, in Income &amp; Outgoings above.' +
+          '<p>Everything filed for this property in one place - the purchase contract, a mortgage statement, tenancy paperwork, compliance certificates, insurance policies, correspondence, or anything else (financial documents belong here too - it isn’t just non-financial paperwork). Records of rent live separately, in Income &amp; Outgoings above.' +
             (uploadableDocSubs.length > 1 ? ' Pick a type when you upload so it ends up in the right place.' : '') +
           '</p>' +
           (hasCompliance ? '<div class="compliance-status" data-compliance-status="' + complianceEntityId + '"></div>' : '') +
@@ -435,7 +435,7 @@
 
       var complianceField = hasCompliance
         ? '<div data-compliance-field' + (multipleTypes ? ' hidden' : '') + '><label>Is this one of the tracked certificates?</label><select name="compliance_type">' +
-            '<option value="">No — general document (tenancy agreement, etc.)</option>' +
+            '<option value="">No - general document (tenancy agreement, etc.)</option>' +
             COMPLIANCE_TYPES.map(function (t) { return '<option value="' + t.id + '">' + escapeHtml(t.label) + '</option>'; }).join('') +
           '</select></div>'
         : '';
@@ -467,7 +467,7 @@
       var currentYear = new Date().getFullYear();
       var status = form.querySelector('.form-status');
 
-      // Several files chosen at once — each becomes its own document,
+      // Several files chosen at once - each becomes its own document,
       // using whatever type/category the form is currently set to (the
       // single-file fields below don't apply to a whole batch at once).
       function handleBulkFiles(files) {
@@ -582,7 +582,7 @@
             if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Upload it again anyway?')) {
               submitBtn.disabled = false;
               submitBtn.textContent = 'Upload document';
-              status.textContent = 'Not uploaded — already on file.';
+              status.textContent = 'Not uploaded - already on file.';
               return;
             }
             doUpload(hash);
@@ -592,19 +592,19 @@
     }
 
     // --- A nested company-owned property's Compliance & Tenancy only
-    // (3 Horning Close, on the Ltd company's own page) — deliberately
+    // (3 Horning Close, on the Ltd company's own page) - deliberately
     // narrower than documentsCardHtml above: no "General" documents, no
     // Insurance, and no Income & Outgoings section at all, since none of
     // that exists for this property any more (its rent and expenses are
-    // Houseago Properties Ltd's own business income — tracked above, on
+    // Houseago Properties Ltd's own business income - tracked above, on
     // this same page, not here). No wording below mentions finances,
     // rent, or expenses for the same reason.
 
     function nestedCompliancePropertyHtml(entityId, name, canUpload) {
       return (
         '<div class="entity-card">' +
-          '<div class="section-head left"><h2>' + escapeHtml(name) + ' &mdash; Compliance &amp; Tenancy</h2></div>' +
-          '<p>Compliance certificates and tenancy paperwork for ' + escapeHtml(name) + ' — gas safety, EICR, EPC, legionella, deposit protection, and inventory documents, tracked the same way as every other property.</p>' +
+          '<div class="section-head left"><h2>' + escapeHtml(name) + ' - Compliance &amp; Tenancy</h2></div>' +
+          '<p>Compliance certificates and tenancy paperwork for ' + escapeHtml(name) + ' - gas safety, EICR, EPC, legionella, deposit protection, and inventory documents, tracked the same way as every other property.</p>' +
           '<div class="compliance-status" data-compliance-status="' + entityId + '"></div>' +
           '<div class="year-filter-row" data-year-filter="' + entityId + '" hidden>' +
             '<label for="year-select-' + entityId + '">Year</label>' +
@@ -629,7 +629,7 @@
             '<div><label>Category (optional)</label><input type="text" name="category" placeholder="e.g. Filed 14 July 2026"></div>' +
           '</div>' +
           '<div><label>Is this one of the tracked certificates?</label><select name="compliance_type">' +
-            '<option value="">No — general document (tenancy agreement, etc.)</option>' +
+            '<option value="">No - general document (tenancy agreement, etc.)</option>' +
             COMPLIANCE_TYPES.map(function (t) { return '<option value="' + t.id + '">' + escapeHtml(t.label) + '</option>'; }).join('') +
           '</select></div>' +
           '<div class="form-grid-2">' +
@@ -644,10 +644,10 @@
     }
 
     // reloadPropertyId is the page actually being viewed (e.g. 'ltd-company')
-    // — never derived from entityId, since a nested entity's own id (e.g.
+    // - never derived from entityId, since a nested entity's own id (e.g.
     // '3-horning-close-compliance-tenancy') belongs to a different property
     // than the page it's nested inside. No expense-category field here,
-    // deliberately — this form is compliance-only, so scanning it only ever
+    // deliberately - this form is compliance-only, so scanning it only ever
     // guesses a document name (e.g. "Gas Safety Certificate") and a year,
     // never anything finance-related.
     function wireNestedComplianceUploadForm(entityId, session, reloadPropertyId) {
@@ -750,7 +750,7 @@
             if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Upload it again anyway?')) {
               submitBtn.disabled = false;
               submitBtn.textContent = 'Upload document';
-              status.textContent = 'Not uploaded — already on file.';
+              status.textContent = 'Not uploaded - already on file.';
               return;
             }
             doUpload(hash);
@@ -840,7 +840,7 @@
 
     // reloadPropertyId is always the property.html page actually being
     // viewed (e.g. 'ltd-company'), passed straight through from
-    // loadProperty/loadDocuments — never derived from listKey/entityId,
+    // loadProperty/loadDocuments - never derived from listKey/entityId,
     // since a nested property's own doc-list (e.g.
     // '3-horning-close-compliance-tenancy') belongs to a different
     // property than the page it's nested inside, and a delete there needs
@@ -889,14 +889,14 @@
         // A nested company-owned property's Compliance & Tenancy (3
         // Horning Close, on the Ltd company's page) also keeps its own
         // single-entity list, separate from this page's own merged
-        // Documents card below — it's a different property's paperwork,
+        // Documents card below - it's a different property's paperwork,
         // just filed inside this page.
         (nestedComplianceIds || []).forEach(function (entityId) {
           renderEntityDocList(entityId, byEntity[entityId] || [], result.error, accessById, session, false, propertyId);
         });
 
         // The merged Documents card pools docs from every doc-type entity
-        // the viewer can see into one list, tagged with a Type badge — the
+        // the viewer can see into one list, tagged with a Type badge - the
         // underlying entities (and their separate access rows) are
         // untouched; only the display is combined.
         if (docEntityIds && docEntityIds.length > 0) {
@@ -914,7 +914,7 @@
     // in a property's own "<id>-income" entity. Outgoings are read from
     // whatever's already been submitted on Receipts & Invoices and linked to
     // this property (the "Relates to" dropdown there, entity_documents.
-    // related_entity_id) — so this doesn't duplicate expense tracking, it
+    // related_entity_id) - so this doesn't duplicate expense tracking, it
     // just reuses it. Someone who can't see Receipts & Invoices simply sees
     // £0 outgoings here, since that query is RLS-scoped the same as anywhere
     // else on the site.
@@ -923,7 +923,7 @@
       return (
         '<div class="entity-card">' +
           '<div class="section-head left"><h2>Income &amp; Outgoings</h2></div>' +
-          '<p>A running total of rent received and money spent on this property — not a place to file documents. Most entries here are just a description, an amount, a date, and whether it&rsquo;s income or an outgoing; nothing needs to be uploaded. Outgoings also include anything tagged to this property under Receipts &amp; Invoices.</p>' +
+          '<p>A running total of rent received and money spent on this property - not a place to file documents. Most entries here are just a description, an amount, a date, and whether it&rsquo;s income or an outgoing; nothing needs to be uploaded. Outgoings also include anything tagged to this property under Receipts &amp; Invoices.</p>' +
           '<div class="income-chart" data-income-chart="' + entityId + '"></div>' +
           '<div class="year-filter-row" data-year-filter="' + entityId + '" hidden>' +
             '<label for="year-select-' + entityId + '">Year</label>' +
@@ -966,8 +966,8 @@
       );
     }
 
-    // A receipt attached here is optional — most entries are still just a
-    // typed description, amount, and date — but if one is attached it's
+    // A receipt attached here is optional - most entries are still just a
+    // typed description, amount, and date - but if one is attached it's
     // scanned the same way as everywhere else on the site (see doc-scan.js)
     // to try to fill in the amount, date, a description ("Gardener",
     // "Cleaner"), the expense category (Repairs & maintenance, Legal &
@@ -976,7 +976,7 @@
     // every guess here is only ever a first pass. The description itself is
     // also read live as it's typed ("Gardener" -> Outgoing, "Rent" ->
     // Income), so most hand-typed entries with no receipt still get a
-    // sensible guess — again, only ever a suggestion, never locked in.
+    // sensible guess - again, only ever a suggestion, never locked in.
     function wireIncomeEntryForm(entityId, session, propertyId) {
       var form = sectionsEl.querySelector('[data-income-entity="' + entityId + '"]');
       if (!form) return;
@@ -995,7 +995,7 @@
         categoryFieldWrap.hidden = entryTypeSelect.value !== 'Outgoing';
       }
 
-      // Several receipts at once, each becoming its own ledger entry — a
+      // Several receipts at once, each becoming its own ledger entry - a
       // file with no amount detectable on it is skipped rather than
       // creating a blank entry, since there'd be nothing sensible to add.
       function handleBulkFiles(files) {
@@ -1029,7 +1029,7 @@
 
       // Tracks whether the current Income/Outgoing value is one the person
       // actually chose from the dropdown, as opposed to a guess (typed or
-      // scanned) — only a real dropdown selection fires 'change' here,
+      // scanned) - only a real dropdown selection fires 'change' here,
       // since every guess below sets .value directly. Once true, no guess
       // is ever allowed to overwrite it again.
       var entryTypeManuallySet = false;
@@ -1059,13 +1059,13 @@
         amountInput: form.querySelector('input[name="amount"]'),
         // The Description field doubles as this form's document title, so
         // it gets the same auto-fill every other upload form on the site
-        // gets ("Gardener", "Cleaning", etc.) — only while still empty,
+        // gets ("Gardener", "Cleaning", etc.) - only while still empty,
         // same as everywhere else.
         nameInput: nameInput,
         entryTypeSelect: entryTypeSelect,
         // The document itself is a better source than a guess typed from
         // the description alone, so a scan result is allowed to override
-        // that earlier guess — just never a choice the person made by hand.
+        // that earlier guess - just never a choice the person made by hand.
         entryTypeOverridable: function () { return !entryTypeManuallySet; },
         onScanned: syncCategoryVisibility,
         categorySelect: categorySelect,
@@ -1136,7 +1136,7 @@
           window.HouseagoDocScan.findDuplicateByHash(client, entityId, hash).then(function (existing) {
             if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Add it again anyway?')) {
               if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add entry'; }
-              status.textContent = 'Not added — already on file.';
+              status.textContent = 'Not added - already on file.';
               return;
             }
             doUpload(hash);
@@ -1145,7 +1145,7 @@
       });
     }
 
-    // A first pass only — bank statement layouts vary hugely between banks
+    // A first pass only - bank statement layouts vary hugely between banks
     // and this is plain keyword + amount matching over whatever text pdf.js
     // (or, for a scanned/photographed statement, Tesseract OCR) can pull off
     // the page, not real column-aware parsing. Every line it finds is shown
@@ -1158,7 +1158,7 @@
       return (
         '<div class="form-card statement-scan" data-statement-scan="' + entityId + '">' +
           '<div class="section-subhead">Or scan a bank statement for rent payments</div>' +
-          '<p>Upload a bank statement (PDF or photo) and this looks for lines mentioning &ldquo;rent&rdquo; alongside an amount, so you can add them as income entries without retyping every line. It is a first pass, not a real bank-statement reader — every suggestion is shown for you to check, edit, or discard before anything is saved, and nothing here reads or stores the statement itself, only what you choose to add below.</p>' +
+          '<p>Upload a bank statement (PDF or photo) and this looks for lines mentioning &ldquo;rent&rdquo; alongside an amount, so you can add them as income entries without retyping every line. It is a first pass, not a real bank-statement reader - every suggestion is shown for you to check, edit, or discard before anything is saved, and nothing here reads or stores the statement itself, only what you choose to add below.</p>' +
           '<input type="file" accept="application/pdf,image/*" data-scan-file>' +
           '<p class="form-status" role="status" data-scan-status></p>' +
           '<div data-scan-results></div>' +
@@ -1182,10 +1182,10 @@
         window.HouseagoDocScan.extractTextFromFile(file).then(function (text) {
           var candidates = window.HouseagoDocScan.extractLikelyIncomeLines(text);
           if (candidates.length === 0) {
-            status.textContent = 'No likely rent lines found — you can still add entries by hand below, or try a clearer copy of the statement.';
+            status.textContent = 'No likely rent lines found - you can still add entries by hand below, or try a clearer copy of the statement.';
             return;
           }
-          status.textContent = 'Found ' + candidates.length + ' possible rent line' + (candidates.length === 1 ? '' : 's') + ' — check each one, then add what looks right.';
+          status.textContent = 'Found ' + candidates.length + ' possible rent line' + (candidates.length === 1 ? '' : 's') + ' - check each one, then add what looks right.';
           results.innerHTML = candidates.map(function (c, i) {
             return (
               '<div class="scan-candidate" data-candidate="' + i + '">' +
@@ -1230,7 +1230,7 @@
     }
 
     // Every person has their own Receipts & Invoices entity (see
-    // receipts.js) — outgoings for a property are read across all three,
+    // receipts.js) - outgoings for a property are read across all three,
     // filtered to whichever submissions were linked to it. RLS quietly
     // limits this to whichever of the three the current viewer actually has
     // access to; it never errors on the ones they don't.
@@ -1259,7 +1259,7 @@
         var yearList = Object.keys(years).sort().reverse();
 
         if (yearList.length === 0) {
-          chartEl.innerHTML = '<p>No income or linked outgoings recorded yet — add an entry below, or link a Receipts &amp; Invoices submission to this property, to see a running total here.</p>';
+          chartEl.innerHTML = '<p>No income or linked outgoings recorded yet - add an entry below, or link a Receipts &amp; Invoices submission to this property, to see a running total here.</p>';
           return;
         }
 
@@ -1284,7 +1284,7 @@
     // --- Receipts & Invoices, linked to this page --------------------------
     // A read-only view of every receipt/invoice anyone has submitted (from
     // their own person.html page) and linked to this property or the Ltd
-    // company via "Relates to" — access, view, and download only; editing
+    // company via "Relates to" - access, view, and download only; editing
     // or deleting a submission still happens from wherever it was
     // submitted, so there's one place that owns each one. RLS limits this
     // to whichever of the three people's Receipts & Invoices the current
@@ -1295,7 +1295,7 @@
       return (
         '<div class="entity-card">' +
           '<div class="section-head left"><h2>Receipts &amp; Invoices</h2></div>' +
-          '<p>Every receipt or invoice linked to this page via &ldquo;Relates to&rdquo; — submitted from Oscar, Sally, or Iris&rsquo;s own page, gathered here so nothing needs re-finding. Edit or delete a submission from wherever it was originally submitted.</p>' +
+          '<p>Every receipt or invoice linked to this page via &ldquo;Relates to&rdquo; - submitted from Oscar, Sally, or Iris&rsquo;s own page, gathered here so nothing needs re-finding. Edit or delete a submission from wherever it was originally submitted.</p>' +
           '<div class="doc-list" data-doc-list="' + listKey + '"><div class="doc-row"><div class="doc-row-main"><div>Loading&hellip;</div></div></div></div>' +
         '</div>'
       );

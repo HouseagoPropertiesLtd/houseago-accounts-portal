@@ -2,9 +2,9 @@
 // authenticator app) for the signed-in account, changing the account
 // password, and sending a password-reset email. 2FA is compulsory for
 // every account (see supabase-schema.sql and the security review) and is
-// deliberately NOT self-service to turn off from here once it's on — see
+// deliberately NOT self-service to turn off from here once it's on - see
 // the note in renderEnabled below. Uses Supabase Auth's own built-in MFA
-// support (client.auth.mfa.*) — no server-side code of ours involved, same
+// support (client.auth.mfa.*) - no server-side code of ours involved, same
 // anon-key-only approach as the rest of the site. See the "Two-factor
 // authentication" section of supabase-schema.sql for the database-side
 // enforcement this pairs with (once an account has a verified factor, the
@@ -32,11 +32,11 @@
     return div.innerHTML;
   }
 
-  // escapeHtml is for text content — it doesn't need to (and by default
+  // escapeHtml is for text content - it doesn't need to (and by default
   // doesn't) escape quote characters, since those are harmless there. The
   // QR code below is a data: URI (an embedded SVG) placed inside an HTML
   // attribute instead, where an unescaped " breaks straight out of the
-  // attribute — so that one specifically needs its quotes escaped too.
+  // attribute - so that one specifically needs its quotes escaped too.
   function escapeAttr(str) {
     return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
@@ -100,7 +100,7 @@
         '<div class="entity-card" id="mfa-card"><p>Loading&hellip;</p></div>';
 
       // Sends a normal Supabase password-reset email to this account's own
-      // registered address — same mechanism as the "Forgot your password?"
+      // registered address - same mechanism as the "Forgot your password?"
       // link on the login page (index.html/auth.js), just reachable from
       // here too since the person is already signed in and their email is
       // already known, so there's no need to type it in again. Lands on
@@ -145,7 +145,7 @@
 
           // currentPassword requires supabase-js v2.102.0+ (this site
           // loads the "@2" tag, which always resolves to the latest v2.x)
-          // — matches "Require current password when updating" turned on
+          // - matches "Require current password when updating" turned on
           // in the Supabase dashboard, so a hijacked session or an
           // unlocked laptop can't change the password without already
           // knowing it. See the security review.
@@ -172,10 +172,10 @@
           document.getElementById('mfa-card').innerHTML = '<p>Could not load your two-factor authentication settings right now. Please refresh and try again.</p>';
           return;
         }
-        // listFactors()'s own grouped .totp array has proven unreliable —
+        // listFactors()'s own grouped .totp array has proven unreliable -
         // it can come back empty even when .all correctly lists an
         // unverified TOTP factor (confirmed by hand: same account, same
-        // moment, .totp === [] and .all === [that factor]) — so this reads
+        // moment, .totp === [] and .all === [that factor]) - so this reads
         // type/status off .all directly instead of trusting the grouped
         // array. Same fix applied everywhere else in the codebase doing
         // this same kind of factor lookup.
@@ -183,7 +183,7 @@
         var totp = allFactors.filter(function (f) { return f.factor_type === 'totp'; });
         var verified = totp.filter(function (f) { return f.status === 'verified'; });
         var unverified = totp.filter(function (f) { return f.status !== 'verified'; });
-        // Whether THIS session has actually completed a code challenge —
+        // Whether THIS session has actually completed a code challenge -
         // not just whether the account has 2FA on. See the note above
         // "Turn off" below for why this matters.
         var thisSessionIsAal2 = !levelsResult.error && levelsResult.data && levelsResult.data.currentLevel === 'aal2';
@@ -206,7 +206,7 @@
     function renderEnabled(session, factor, thisSessionIsAal2) {
       // Two-factor authentication is compulsory for every account (see the
       // "Two-factor authentication made compulsory" section of the
-      // security review) — there is deliberately no way to turn it off
+      // security review) - there is deliberately no way to turn it off
       // here. The database itself refuses to hand back any data for a
       // session that hasn't completed a 2FA challenge, so a UI toggle to
       // disable it would be misleading even if it were offered. Lost
@@ -252,7 +252,7 @@
       var secret = (factor.totp && factor.totp.secret) || '';
       card.innerHTML =
         '<div class="section-head left"><h2>Set up two-factor authentication</h2></div>' +
-        '<p>Scan this QR code with an authenticator app &mdash; Microsoft Authenticator, Google Authenticator, Authy, 1Password, and similar all work, since this uses the same standard (TOTP) every one of them supports. In Microsoft Authenticator: tap the &ldquo;+&rdquo; to add an account, then &ldquo;Other account&rdquo; (not &ldquo;Work or school account&rdquo;), then scan. Or enter the setup key by hand below if you can’t scan it.</p>' +
+        '<p>Scan this QR code with an authenticator app - Microsoft Authenticator, Google Authenticator, Authy, 1Password, and similar all work, since this uses the same standard (TOTP) every one of them supports. In Microsoft Authenticator: tap the &ldquo;+&rdquo; to add an account, then &ldquo;Other account&rdquo; (not &ldquo;Work or school account&rdquo;), then scan. Or enter the setup key by hand below if you can’t scan it.</p>' +
         '<div class="mfa-qr-wrap">' +
           (qr ? '<img src="' + escapeAttr(qr) + '" alt="QR code for two-factor authentication setup">' : '') +
           '<div class="mfa-secret"><strong>Setup key</strong><br><code>' + escapeHtml(secret) + '</code></div>' +

@@ -4,12 +4,12 @@
 // pick up the update rather than an old cached copy.
 //
 // Only same-origin requests (this site's own files) are ever cached or
-// intercepted here. Everything else — Supabase (your data and documents),
-// Google Fonts, and the CDN scripts used for scanning receipts — always goes
+// intercepted here. Everything else - Supabase (your data and documents),
+// Google Fonts, and the CDN scripts used for scanning receipts - always goes
 // straight to the network, untouched, so nothing here can ever serve stale
 // or incorrect account data.
 
-var CACHE_NAME = 'houseago-asset-management-v34';
+var CACHE_NAME = 'houseago-asset-management-v35';
 
 var PRECACHE_URLS = [
   './',
@@ -49,7 +49,7 @@ self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(function (cache) { return cache.addAll(PRECACHE_URLS); })
-      .catch(function () { /* offline on first install, or a file briefly missing — fine, fetch handler below covers it */ })
+      .catch(function () { /* offline on first install, or a file briefly missing - fine, fetch handler below covers it */ })
       .then(function () { return self.skipWaiting(); })
   );
 });

@@ -1,27 +1,27 @@
-// Powers reset-password.html — the second half of the "forgot password"
+// Powers reset-password.html - the second half of the "forgot password"
 // flow (the first half is the request form on index.html, wired in
 // auth.js). Someone arrives here from the link in the email Supabase
 // sends after resetPasswordForEmail(). Supabase's client library parses
 // the recovery token out of the URL itself (detectSessionInUrl, on by
 // default) and fires a PASSWORD_RECOVERY auth event once it has turned
-// that into a real (but recovery-only) session — this page waits for
+// that into a real (but recovery-only) session - this page waits for
 // that event before showing the "set a new password" form, rather than
 // assuming the link was valid just because the page loaded.
 //
 // Setting the new password here does NOT need the current password (see
 // "Require current password when updating" in the Supabase dashboard,
-// and the security review) — that setting only applies to a normal
+// and the security review) - that setting only applies to a normal
 // logged-in password change (security.html), not to this recovery flow,
 // since clicking the emailed link is itself the proof of identity.
 //
 // One thing the recovery link does NOT do on its own: clicking the email
 // link only ever proves the address, so Supabase starts the recovery
 // session at aal1 (password-only) even for an account that already has a
-// verified authenticator app — and since 2FA is compulsory here
+// verified authenticator app - and since 2FA is compulsory here
 // (supabase-schema.sql's mfa_ok()), Supabase's own server-side rule
 // refuses to let an aal1 session call updateUser({password}) at all once
 // a verified factor exists ("AAL2 session is required to update email or
-// password when MFA is enable[d]" — a real Supabase error, previously
+// password when MFA is enable[d]" - a real Supabase error, previously
 // shown to the person verbatim, unexplained). So for anyone who has
 // already set up 2FA, this page needs an extra step before the password
 // form: challenge that factor the same way index.html's login flow does,
@@ -59,7 +59,7 @@
   }
 
   // Decides whether the recovery session can go straight to the password
-  // form, or needs an MFA code first — see the note at the top of this
+  // form, or needs an MFA code first - see the note at the top of this
   // file. nextLevel is what the session COULD reach given the factors on
   // this account; currentLevel is where it actually is right now. They
   // only differ when a verified factor exists and this particular session
@@ -135,7 +135,7 @@
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Verifying…'; }
 
         client.auth.mfa.listFactors().then(function (factorsResult) {
-          // .data.all, not the pre-grouped .data.totp — see the security
+          // .data.all, not the pre-grouped .data.totp - see the security
           // review's note on this SDK quirk (auth.js/security.js use the
           // same fix).
           var allFactors = (factorsResult.data && factorsResult.data.all) || [];
@@ -224,7 +224,7 @@
         var done = document.getElementById('reset-done');
         if (done) done.hidden = false;
         // Confirm briefly, then send them straight back to log in with the
-        // new password rather than making them click through — matches
+        // new password rather than making them click through - matches
         // the plain login flow everywhere else on the site.
         setTimeout(function () {
           window.location.href = 'index.html';

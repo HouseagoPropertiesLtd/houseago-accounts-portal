@@ -3,19 +3,19 @@
 // main dashboard or a person's own page, because unlike other sections
 // this one is meant to be submitted to often and just needs a place to
 // land. Each person (Oscar, Sally, Iris) has their own Receipts &
-// Invoices entity — "<key>-receipts-invoices" — linked from their own
+// Invoices entity - "<key>-receipts-invoices" - linked from their own
 // page (person.html?id=<key>); which one this page shows is driven by
 // its own "?owner=" query string, the same way property.html and
 // person.html are driven by "?id=".
 //
 // Each submission can optionally be "linked" to one of the core
-// accounts/properties via related_entity_id — this is descriptive only
+// accounts/properties via related_entity_id - this is descriptive only
 // (for filtering/organising later), not an access control mechanism:
 // everyone with access to this Receipts & Invoices entity sees every
 // submission in it, regardless of what it's linked to. A property's own
 // Income & Outgoings section (see property.js) totals up outgoings by
 // reading across all three people's Receipts & Invoices entities for
-// whichever ones link to that property — so it doesn't matter which
+// whichever ones link to that property - so it doesn't matter which
 // person a receipt was submitted under, only what it's linked to.
 
 (function () {
@@ -50,7 +50,7 @@
     return div.innerHTML;
   }
 
-  // escapeHtml alone is only safe for text content — it doesn't touch quote
+  // escapeHtml alone is only safe for text content - it doesn't touch quote
   // characters, so a value from an untrusted source can still break out of
   // a double-quoted HTML attribute like value="..." even after escapeHtml.
   // Use this instead wherever a value lands inside an attribute.
@@ -87,7 +87,7 @@
 
   // Reads whichever fields it can off a file: OCR for an image, the text
   // layer (or OCR fallback) for a PDF. Runs once and mines both the date
-  // and the amount out of the same pass of text — the engine itself lives
+  // and the amount out of the same pass of text - the engine itself lives
   // in assets/doc-scan.js, this just adapts its result to the
   // {date, amount, title, category, text} shape this page uses, keeping
   // the raw text too so guessReceiptName (below) has something to work
@@ -101,14 +101,14 @@
 
   // ---- Guessing a name for the receipt itself -----------------------------
   // The shared title guess (guessDocType, in doc-scan.js) is a fixed list of
-  // property-expense keywords — "boiler", "insurance", "gas safety" — built
+  // property-expense keywords - "boiler", "insurance", "gas safety" - built
   // for compliance and expense documents, not for reading the shop or
   // business name printed on an ordinary receipt or invoice, which it will
   // usually have nothing to say about. A receipt/invoice's own name is
   // almost always the business name, printed across the first line or two,
   // so when the category guess finds nothing, fall back to the first line
   // of the document's own text that looks like a name rather than a
-  // barcode, a date, or a lone total — not blank, not just digits and
+  // barcode, a date, or a lone total - not blank, not just digits and
   // punctuation, and a plausible length for a business name.
   function guessReceiptName(text) {
     if (!text) return null;
@@ -124,7 +124,7 @@
 
   // ---- Falling back to the products purchased, when nothing else names it
   // Neither the category guess nor a plausible first line always finds
-  // something — a faded till receipt, a logo instead of a printed store
+  // something - a faded till receipt, a logo instead of a printed store
   // name, or a first line that OCR simply couldn't read. When that
   // happens, the itemised list is usually still there and still readable,
   // so read it: a line that looks like "<product name> ... <price>" is a
@@ -150,8 +150,8 @@
     return items;
   }
 
-  // Joins item names in descending price order — the priciest item first,
-  // as usually the one worth naming the receipt after — stopping once
+  // Joins item names in descending price order - the priciest item first,
+  // as usually the one worth naming the receipt after - stopping once
   // adding the next name would push past maxLen, rather than cutting a
   // name off mid-word.
   function joinItemNames(names, maxLen) {
@@ -167,7 +167,7 @@
   // The single place both the single-submission and bulk-upload paths go
   // for a name/description: the category guess and the first-line guess
   // first, and only once both of those have nothing to say, the products
-  // actually purchased — a short join for the Name field, a longer one for
+  // actually purchased - a short join for the Name field, a longer one for
   // Description when it says more than the name alone already does.
   function guessNameAndDescription(fields) {
     if (fields.title) return { name: fields.title, description: null };
@@ -197,7 +197,7 @@
 
   // ---- Automatic crop: find roughly where the receipt is in a photo -----
   // This is a plain contrast/edge heuristic, not full document-scanner
-  // perspective correction — it finds the largest contiguous band of high
+  // perspective correction - it finds the largest contiguous band of high
   // local contrast (printed text, receipt edges) in each direction and
   // crops to that, which works well for a receipt photographed on a plain,
   // contrasting surface. It never touches the original file: the person can
@@ -216,7 +216,7 @@
   // Finds where most of the content actually is along one axis, by
   // trimming the faintest ~4% of total contrast energy off each end and
   // keeping what's left. This is a cumulative-mass trim rather than a
-  // "longest unbroken run above a threshold" — printed text has blank gaps
+  // "longest unbroken run above a threshold" - printed text has blank gaps
   // between lines (a run-based approach only ever finds one line at a
   // time), but the *energy* is still overwhelmingly concentrated within
   // the receipt's true bounds, gaps and all, so trimming by mass finds the
@@ -264,7 +264,7 @@
       try {
         imgData = wctx.getImageData(0, 0, workW, workH);
       } catch (e) {
-        return null; // can't read pixels — skip cropping, keep the original
+        return null; // can't read pixels - skip cropping, keep the original
       }
       var data = imgData.data;
 
@@ -316,10 +316,10 @@
 
   // ---- Expense categories --------------------------------------------------
   // A fixed pick-list rather than free text, kept short and roughly matching
-  // how a UK property tax return groups expenses — good enough for a
+  // how a UK property tax return groups expenses - good enough for a
   // running breakdown without turning submission into data entry.
   // The category list itself now lives in assets/doc-scan.js, shared with
-  // every other upload point on the site — this just keeps the same name
+  // every other upload point on the site - this just keeps the same name
   // available here since the rest of this file already refers to it.
   var EXPENSE_CATEGORIES = window.HouseagoDocScan.EXPENSE_CATEGORIES;
 
@@ -363,7 +363,7 @@
   }
 
   // Always 12 entries, April through March, even for months with nothing
-  // submitted — so a gap reads as "nothing that month", not a missing bar.
+  // submitted - so a gap reads as "nothing that month", not a missing bar.
   function monthlyTotalsForYear(yearEntry) {
     var totals = {};
     (yearEntry.docs || []).forEach(function (doc) {
@@ -449,7 +449,7 @@
       var maxHeight = 180;
 
       // With up to 12 narrow columns, an inline "£X.XX" label on every bar
-      // overlaps its neighbours — so only the tallest bar (the one worth
+      // overlaps its neighbours - so only the tallest bar (the one worth
       // calling out) is labelled directly. Every bar's exact figure is still
       // available via its tooltip (tap or hover).
       var html = '<div class="chart-wrap">';
@@ -485,7 +485,7 @@
     var wb = XLSX.utils.book_new();
 
     var summaryRows = [
-      ['Houseago Asset Management — Receipts & Invoices summary'],
+      ['Houseago Asset Management - Receipts & Invoices summary'],
       ['Generated ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })],
       [],
       ['Financial year', 'Total (£)', 'Submissions']
@@ -552,7 +552,7 @@
       return;
     }
     if (!docs || docs.length === 0) {
-      alert('Nothing to export yet — submit a dated, priced receipt or invoice first.');
+      alert('Nothing to export yet - submit a dated, priced receipt or invoice first.');
       return;
     }
     var wb = buildReceiptsWorkbook(docs, namesById || {});
@@ -569,7 +569,7 @@
     if (!owner) {
       if (titleEl) titleEl.textContent = 'Not found';
       accessNote.hidden = false;
-      accessNote.querySelector('p').textContent = 'This page needs a person to show Receipts & Invoices for — open it from Oscar, Sally, or Iris’s own page rather than linking to it directly.';
+      accessNote.querySelector('p').textContent = 'This page needs a person to show Receipts & Invoices for - open it from Oscar, Sally, or Iris’s own page rather than linking to it directly.';
       return;
     }
     if (titleEl) titleEl.textContent = owner.label + '’s receipts, invoices, and evidence';
@@ -603,8 +603,8 @@
     var amountStatus = document.getElementById('receipt-amount-status');
     var exportBtn = document.getElementById('receipts-export-btn');
 
-    // Fields the scan itself filled in, so "Clear" can undo exactly those —
-    // never something typed by hand — the same rule as every other upload
+    // Fields the scan itself filled in, so "Clear" can undo exactly those -
+    // never something typed by hand - the same rule as every other upload
     // point on the site (see assets/doc-scan.js).
     var scanAutofilled = [];
     function trackAutofill(el, value) { if (el) scanAutofilled.push({ el: el, value: String(value) }); }
@@ -695,7 +695,7 @@
             useCropCheckbox.checked = true;
             updatePreviewImage();
           }
-          // Scan whichever version will actually be uploaded — the crop,
+          // Scan whichever version will actually be uploaded - the crop,
           // once available, since it's tighter and usually reads better.
           var upload = currentUploadFile();
           scanFileForReceiptFields(upload ? upload.blob : file, false, true).then(applyScanResult);
@@ -709,12 +709,12 @@
 
     // Runs the same auto-crop used for a single photo (see autoCropImageFile
     // above) on one file from a bulk batch, before it goes anywhere near
-    // scanning or uploading — a bulk batch gets exactly the same crop and
+    // scanning or uploading - a bulk batch gets exactly the same crop and
     // OCR/text-detection treatment a single receipt does, just without a
     // preview to check each one against (there's no one image to show a
     // crop toggle for across a whole batch, so each crop is applied
     // automatically rather than offered as a choice). Non-image files
-    // (PDFs) pass through untouched — auto-crop is an image-only heuristic.
+    // (PDFs) pass through untouched - auto-crop is an image-only heuristic.
     // Keeps the original filename, so a fallback title built from it still
     // reads sensibly, and falls back to the original file untouched if
     // cropping finds nothing worth cropping to or fails outright.
@@ -728,8 +728,8 @@
     }
 
     // Picking several files at once (via "Choose a file", which now allows
-    // multiple) skips the single-file capture flow above — there's no one
-    // set of fields to prefill for several different documents at once —
+    // multiple) skips the single-file capture flow above - there's no one
+    // set of fields to prefill for several different documents at once -
     // and instead uploads each one as its own submission: each image is
     // auto-cropped first (see cropIfImage), then scanned and uploaded
     // through the shared engine every other upload point on the site uses
@@ -745,7 +745,7 @@
         return;
       }
       if (!expenseTypeSelect.value) {
-        fileStatus.textContent = 'Please choose a Type below first — it applies to the whole batch — then choose your files again.';
+        fileStatus.textContent = 'Please choose a Type below first - it applies to the whole batch - then choose your files again.';
         return;
       }
       var relatedEntityId = relatedSelect.value || null;
@@ -787,14 +787,14 @@
         trackAutofill(dateInput, fields.date);
         dateStatus.textContent = 'Date detected automatically from the document. Please check it is correct.';
       } else {
-        dateStatus.textContent = "Could not detect a date automatically — please enter it below.";
+        dateStatus.textContent = "Could not detect a date automatically - please enter it below.";
       }
       if (fields.amount != null) {
         amountInput.value = fields.amount.toFixed(2);
         trackAutofill(amountInput, fields.amount.toFixed(2));
         amountStatus.textContent = 'Amount detected automatically. Please check it is correct.';
       } else {
-        amountStatus.textContent = "Could not detect an amount automatically — please enter it if known.";
+        amountStatus.textContent = "Could not detect an amount automatically - please enter it if known.";
       }
       var guess = guessNameAndDescription(fields);
       if (guess.name && nameInput && !nameInput.value) {
@@ -934,8 +934,8 @@
         .select('id, name, sort_order')
         .then(function (result) {
           if (result.error) return;
-          // Only entities that make sense as a "relates to" target — the Ltd
-          // company, a sole trader/finances account, or a property — not a
+          // Only entities that make sense as a "relates to" target - the Ltd
+          // company, a sole trader/finances account, or a property - not a
           // property's own Compliance & Tenancy/Insurance/Income sub-section,
           // anyone's Bank Statements/Investment/Employment/Receipts
           // sub-entity, or this page's own entity.
@@ -1141,14 +1141,14 @@
         }
 
         // Flag re-submitting the exact same file, same as every other
-        // upload point on the site — the file's own bytes are hashed and
+        // upload point on the site - the file's own bytes are hashed and
         // checked against what's already on this Receipts & Invoices
         // entity, so a receipt photographed or picked twice by mistake
         // gets a confirmation rather than a silent duplicate.
         window.HouseagoDocScan.hashFile(upload.blob).then(function (hash) {
           window.HouseagoDocScan.findDuplicateByHash(client, ENTITY_ID, hash).then(function (existing) {
             if (existing && !window.confirm('This exact file looks like it’s already been submitted (as "' + existing.name + '"). Submit it again anyway?')) {
-              status.textContent = 'Not submitted — already on file.';
+              status.textContent = 'Not submitted - already on file.';
               return;
             }
             doSubmit(hash);
