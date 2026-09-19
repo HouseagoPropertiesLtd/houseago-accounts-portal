@@ -223,6 +223,12 @@
         form.hidden = true;
         var done = document.getElementById('reset-done');
         if (done) done.hidden = false;
+        // Confirm briefly, then send them straight back to log in with the
+        // new password rather than making them click through — matches
+        // the plain login flow everywhere else on the site.
+        setTimeout(function () {
+          window.location.href = 'index.html';
+        }, 1800);
       });
     });
   });

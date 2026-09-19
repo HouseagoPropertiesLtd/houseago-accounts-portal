@@ -526,6 +526,19 @@
               forgotSuccess.textContent = 'If ' + email + ' has an account, a password reset link is on its way. The link is valid for a limited time — check your inbox (and spam folder).';
               forgotSuccess.hidden = false;
             }
+          }).catch(function () {
+            // A rejected promise here (a dropped connection, a browser
+            // extension blocking the request, a flaky network) previously
+            // left the button stuck on "Sending…" forever with no feedback
+            // at all — indistinguishable, from the person's side, from the
+            // button doing nothing when clicked. Always resolve the button
+            // back to a usable state and say something went wrong, so a
+            // failed request is visible and retryable rather than silent.
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Send reset link'; }
+            if (forgotError) {
+              forgotError.textContent = 'Could not send that just now — please check your connection and try again.';
+              forgotError.hidden = false;
+            }
           });
         });
       }
