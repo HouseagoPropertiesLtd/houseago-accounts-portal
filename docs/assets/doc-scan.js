@@ -615,6 +615,12 @@
     var status = form.querySelector('[data-scan-status]');
     var currentFile = null;
     var autofilled = [];
+    // Bumped every time a file is picked or cleared, so a slow scan for a
+    // file that's since been replaced (or cleared) never lands its result
+    // into fields that now belong to a different file - see the fuller
+    // explanation in receipts.js's captureGen, which has the same guard for
+    // its own separate capture/crop/scan flow.
+    var gen = 0;
 
     if (captureBtn && cameraInput) captureBtn.addEventListener('click', function () { cameraInput.click(); });
     if (chooseBtn && pickerInput) chooseBtn.addEventListener('click', function () { pickerInput.click(); });
@@ -631,9 +637,12 @@
       if (!file) return;
       currentFile = file;
       autofilled = [];
+      gen++;
+      var myGen = gen;
       if (status) status.textContent = file.name + ' - reading…';
       if (clearBtn) clearBtn.hidden = false;
       scanFileForFields(file).then(function (fields) {
+        if (myGen !== gen) return; // a different file has been picked (or Clear was pressed) since this scan started
         var bits = [file.name];
         tryFill(opts.dateInput, fields.date, 'date auto-filled, check it’s right', bits);
         tryFill(opts.amountInput, fields.amount, 'amount auto-filled, check it’s right', bits);
@@ -660,6 +669,7 @@
         // assignment above never fires a 'change' event on its own.
         if (opts.onScanned) opts.onScanned(fields);
       }).catch(function () {
+        if (myGen !== gen) return;
         if (status) status.textContent = file.name + ' - could not read it automatically, fill in the fields by hand.';
       });
     }
@@ -679,6 +689,7 @@
 
     function doReset() {
       currentFile = null;
+      gen++;
       if (cameraInput) cameraInput.value = '';
       if (pickerInput) pickerInput.value = '';
       if (status) status.textContent = 'No file chosen yet.';

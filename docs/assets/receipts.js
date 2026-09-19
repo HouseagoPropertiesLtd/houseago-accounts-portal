@@ -296,7 +296,7 @@
       var y1 = Math.min(workH, rowBox.end + padY);
 
       var areaFrac = ((x1 - x0) * (y1 - y0)) / (workW * workH);
-      if (areaFrac > 0.92 || areaFrac < 0.05) return null; // nothing worth cropping to
+      if (areaFrac > 0.97 || areaFrac < 0.05) return null; // nothing worth cropping to
 
       var fx0 = Math.round(x0 / scale), fy0 = Math.round(y0 / scale);
       var fx1 = Math.round(x1 / scale), fy1 = Math.round(y1 / scale);
@@ -636,7 +636,21 @@
     var croppedBlob = null;    // the auto-cropped version, once/if computed
     var croppedUrl = null;     // object URL for the crop preview
 
+    // Auto-crop and OCR both run in the background after a photo's taken,
+    // and on a phone either one can take several seconds - long enough for
+    // someone to retake the photo (tap "Take a photo" again) or hit "Clear"
+    // before the first attempt has finished. Without a guard, that first,
+    // now-stale attempt finishing late would still write its result
+    // (a crop, or scanned fields) into whatever is now on screen - silently
+    // replacing a newer photo with an old one, or reviving fields after
+    // "Clear" was pressed. captureGen is bumped every time the photo
+    // changes; every async callback below checks it's still the generation
+    // it started with before touching anything, and simply drops its result
+    // otherwise.
+    var captureGen = 0;
+
     function resetCaptureState() {
+      captureGen++;
       if (originalUrl) URL.revokeObjectURL(originalUrl);
       if (croppedUrl) URL.revokeObjectURL(croppedUrl);
       originalFile = null; originalUrl = null; croppedBlob = null; croppedUrl = null;
@@ -671,6 +685,7 @@
       if (!file) return;
       resetCaptureState();
       revertAutofills();
+      var myGen = captureGen; // resetCaptureState() above already bumped this
       originalFile = file;
       originalUrl = URL.createObjectURL(file);
       if (clearBtn) clearBtn.hidden = false;
@@ -684,11 +699,17 @@
       dateStatus.textContent = 'Reading the document for a date…';
       amountStatus.textContent = '';
 
+      // Whatever happens in the scan below - found something, found
+      // nothing, or errored out - the photo itself is already attached
+      // (originalFile/originalUrl are set above) and every field remains
+      // free to fill in by hand; this only ever adds detected values on
+      // top, never removes the photo or blocks manual entry.
       if (isImage) {
         previewCard.hidden = false;
         previewImg.src = originalUrl;
 
         autoCropImageFile(file).then(function (result) {
+          if (myGen !== captureGen) return; // a newer photo (or Clear) has since taken over - drop this stale result
           if (result && result.blob) {
             croppedBlob = result.blob;
             useCropCheckbox.parentElement.hidden = false;
@@ -698,10 +719,24 @@
           // Scan whichever version will actually be uploaded - the crop,
           // once available, since it's tighter and usually reads better.
           var upload = currentUploadFile();
-          scanFileForReceiptFields(upload ? upload.blob : file, false, true).then(applyScanResult);
+          return scanFileForReceiptFields(upload ? upload.blob : file, false, true).then(function (fields) {
+            if (myGen !== captureGen) return; // stale - a newer capture/clear has already replaced this one
+            applyScanResult(fields);
+          });
+        }).catch(function () {
+          if (myGen !== captureGen) return;
+          dateStatus.textContent = "Could not read that document automatically - the photo is still attached, please enter the date by hand.";
+          amountStatus.textContent = 'You can enter the amount by hand if known.';
         });
       } else if (isPdf) {
-        scanFileForReceiptFields(file, true, false).then(applyScanResult);
+        scanFileForReceiptFields(file, true, false).then(function (fields) {
+          if (myGen !== captureGen) return;
+          applyScanResult(fields);
+        }).catch(function () {
+          if (myGen !== captureGen) return;
+          dateStatus.textContent = "Could not read that document automatically - the file is still attached, please enter the date by hand.";
+          amountStatus.textContent = 'You can enter the amount by hand if known.';
+        });
       } else {
         dateStatus.textContent = "Choose a file above and we'll try to read its date automatically.";
       }
@@ -787,14 +822,14 @@
         trackAutofill(dateInput, fields.date);
         dateStatus.textContent = 'Date detected automatically from the document. Please check it is correct.';
       } else {
-        dateStatus.textContent = "Could not detect a date automatically - please enter it below.";
+        dateStatus.textContent = "Could not detect a date automatically - the photo is still attached, please enter the date below.";
       }
       if (fields.amount != null) {
         amountInput.value = fields.amount.toFixed(2);
         trackAutofill(amountInput, fields.amount.toFixed(2));
         amountStatus.textContent = 'Amount detected automatically. Please check it is correct.';
       } else {
-        amountStatus.textContent = "Could not detect an amount automatically - please enter it if known.";
+        amountStatus.textContent = "Could not detect an amount automatically - please enter it below if known.";
       }
       var guess = guessNameAndDescription(fields);
       if (guess.name && nameInput && !nameInput.value) {

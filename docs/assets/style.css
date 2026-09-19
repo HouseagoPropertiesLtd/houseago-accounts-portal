@@ -37,6 +37,12 @@ body {
   color: var(--ink-soft);
   background: var(--sandstone);
   line-height: 1.65;
+  /* Belt-and-braces: nothing on this site should ever need to scroll
+     sideways on a phone. Every individual overflow risk is fixed at its
+     source (see the header, doc-row and scan-candidate rules), but this
+     is a safety net so a component we haven't spotted yet degrades to
+     "clipped" rather than "the whole page scrolls horizontally". */
+  overflow-x: hidden;
 }
 
 h1, h2, h3, h4 {
@@ -88,6 +94,8 @@ img, svg { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 10px;
   padding: 16px 24px;
   max-width: 1000px;
   margin: 0 auto;
@@ -332,8 +340,16 @@ section { padding: 60px 0; }
   text-decoration: underline;
 }
 
-/* ---------- Header actions (two links side by side, e.g. Security + Log out) ---------- */
-.header-actions { display: flex; align-items: center; gap: 10px; }
+/* ---------- Header actions (two or three links side by side, e.g. Security + Log out) ---------- */
+.header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  /* On narrow viewports the brand wordmark takes the whole first line, and
+     the action buttons wrap onto their own row below rather than being
+     squeezed (or overflowing the viewport) alongside it. */
+  .header-inner { justify-content: center; }
+  .brand { justify-content: center; }
+  .header-actions { width: 100%; justify-content: center; }
+}
 @media (max-width: 480px) {
   .header-actions .btn { padding: 10px 16px; font-size: 0.82rem; }
 }
