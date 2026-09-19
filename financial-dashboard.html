@@ -43,6 +43,7 @@
       <span class="brand-word"><span class="brand-word-1">Houseago</span><span class="brand-word-2">Asset Management</span></span>
     </a>
     <div class="header-actions">
+      <a href="dashboard.html" class="btn btn-outline">Asset Overview</a>
       <a href="security.html" class="btn btn-outline">Security</a>
       <a href="index.html" class="btn btn-outline" data-portal-logout>Log out</a>
     </div>
@@ -52,12 +53,21 @@
 <section class="bg-panel" style="padding-top:36px;">
   <div class="container">
 
-    <p style="margin-bottom:28px;"><a href="dashboard.html" style="font-weight:700; color:var(--navy);">&larr; Asset Overview</a></p>
+    <div class="portal-topbar">
+      <div class="portal-user">
+        <div class="portal-avatar" id="portal-avatar">A</div>
+        <div>
+          <div style="font-weight:700; color:var(--ink);">Welcome back, <span id="portal-welcome-name">there</span></div>
+          <div style="font-size:0.85rem;" id="portal-user-email"></div>
+        </div>
+      </div>
+      <a href="index.html" class="btn btn-outline" data-portal-logout>Log out</a>
+    </div>
 
     <div class="section-head left">
       <p class="eyebrow">Financial Summary</p>
       <h2>How the portfolio is doing</h2>
-      <p>Income, expenses, and net profit across every property and account you have access to — pulled together from each property's Income &amp; Outgoings ledger and everyone's Receipts &amp; Invoices. A guide, not a substitute for your accounts.</p>
+      <p>Income, expenses, and net profit across every property and account you have access to — pulled together from each property's Income &amp; Outgoings ledger and everyone's Receipts &amp; Invoices. A guide, not a substitute for your accounts. Looking for documents instead? See the <a href="dashboard.html" style="font-weight:700; color:var(--navy); text-decoration:underline;">Asset Overview</a>.</p>
     </div>
 
     <div id="fd-empty" class="entity-card" hidden>

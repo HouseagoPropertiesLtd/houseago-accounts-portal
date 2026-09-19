@@ -89,6 +89,18 @@
     return new URLSearchParams(window.location.search).get(name);
   }
 
+  // Same first-name heuristic as assets/auth.js (dashboard.html) — kept as
+  // its own small copy here rather than shared, same as every other page.
+  function firstNameFor(user) {
+    var meta = (user && user.user_metadata) || {};
+    var name = meta.first_name || meta.given_name || meta.full_name || meta.name;
+    if (name) return String(name).trim().split(/\s+/)[0];
+    var local = ((user && user.email) || '').split('@')[0];
+    local = local.split(/[.\-_+0-9]/).filter(Boolean)[0] || local;
+    if (!local) return 'there';
+    return local.charAt(0).toUpperCase() + local.slice(1).toLowerCase();
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     var statTilesEl = document.getElementById('fd-stat-tiles');
     var fySelect = document.getElementById('fd-fy-select');
@@ -138,6 +150,15 @@
       if (!session) { window.location.href = 'index.html'; return; }
       ensureAal2().then(function (ok) {
         if (!ok) return;
+
+        var userEmail = document.getElementById('portal-user-email');
+        if (userEmail) userEmail.textContent = session.user.email;
+        var firstName = firstNameFor(session.user);
+        var welcomeName = document.getElementById('portal-welcome-name');
+        if (welcomeName) welcomeName.textContent = firstName;
+        var avatar = document.getElementById('portal-avatar');
+        if (avatar) avatar.textContent = firstName.charAt(0).toUpperCase();
+
         loadFinancials();
       });
     });
