@@ -143,6 +143,12 @@
     return new URLSearchParams(window.location.search).get(name);
   }
 
+  // Shared by the per-property breakdown and the monthly chart's asset
+  // filter, so a property is always named the same way in both places.
+  function labelForPropertyId(key) {
+    return LABEL_BY_PROPERTY_ID[key] || (key === 'general' ? 'General / Other (not linked to a property)' : key);
+  }
+
   // Same first-name heuristic as assets/auth.js (dashboard.html) — kept as
   // its own small copy here rather than shared, same as every other page.
   function firstNameFor(user) {
@@ -165,6 +171,8 @@
     var mainEl = document.getElementById('fd-main');
     var complianceCardEl = document.getElementById('fd-compliance-card');
     var complianceListEl = document.getElementById('fd-compliance-list');
+    var monthlyChartEl = document.getElementById('fd-monthly-chart');
+    var monthlyAssetSelect = document.getElementById('fd-monthly-asset-select');
 
     document.querySelectorAll('[data-portal-logout]').forEach(function (link) {
       link.addEventListener('click', function (e) {
@@ -287,7 +295,13 @@
         var ownRows = (results[0].data || []).filter(function (d) { return d.amount != null; });
         var receiptRows = (results[1].data || []).filter(function (d) { return d.amount != null; });
 
-        // Normalise everything to one shape: { amount, type, propertyId, category, fy }
+        // Normalise everything to one shape: { amount, type, propertyId,
+        // category, fy, month }. month is the calendar month (1-12) from
+        // doc_date, used only by the monthly chart below — a row with no
+        // doc_date (an older hand-typed entry with just a year) still
+        // counts everywhere else on this page, just not in that one chart,
+        // since there's no date within the year to place it at.
+        function monthOf(d) { return d.doc_date ? parseInt(d.doc_date.split('-')[1], 10) : null; }
         var rows = [];
         ownRows.forEach(function (d) {
           var propertyId = d.entity_id.replace(/-income$/, '');
@@ -296,7 +310,8 @@
             type: d.entry_type === 'Outgoing' ? 'Outgoing' : 'Income',
             propertyId: propertyId,
             category: d.expense_category || null,
-            fy: yearOf(d)
+            fy: yearOf(d),
+            month: monthOf(d)
           });
         });
         receiptRows.forEach(function (d) {
@@ -305,7 +320,8 @@
             type: 'Outgoing',
             propertyId: d.related_entity_id || 'general',
             category: d.expense_category || null,
-            fy: yearOf(d)
+            fy: yearOf(d),
+            month: monthOf(d)
           });
         });
 
@@ -390,7 +406,7 @@
         propertyEl.innerHTML = propertyKeys.length === 0 ? '<p>Nothing recorded for this financial year yet.</p>' :
           propertyKeys.map(function (key) {
             var p = byProperty[key];
-            var label = LABEL_BY_PROPERTY_ID[key] || (key === 'general' ? 'General / Other (not linked to a property)' : key);
+            var label = labelForPropertyId(key);
             var pnet = p.income - p.outgoing;
             return (
               '<div class="income-year-row">' +
@@ -405,8 +421,109 @@
           }).join('');
       }
 
-      renderForYear(years[0].startYear);
-      fySelect.addEventListener('change', function () { renderForYear(parseInt(fySelect.value, 10)); });
+      // ---- Monthly income & expenses chart -----------------------------
+      // Every property/account that appears anywhere in the data (not just
+      // the selected financial year), so switching financial year never
+      // makes an option disappear from under someone mid-look — "Whole
+      // portfolio" always comes first and is the default.
+      if (monthlyChartEl && monthlyAssetSelect) {
+        var assetTotals = {};
+        rows.forEach(function (r) {
+          var key = r.propertyId || 'general';
+          assetTotals[key] = (assetTotals[key] || 0) + r.amount;
+        });
+        var assetKeys = Object.keys(assetTotals).sort(function (a, b) { return assetTotals[b] - assetTotals[a]; });
+        monthlyAssetSelect.innerHTML = '<option value="">Whole portfolio</option>' +
+          assetKeys.map(function (key) { return '<option value="' + escapeHtml(key) + '">' + escapeHtml(labelForPropertyId(key)) + '</option>'; }).join('');
+      }
+
+      function renderMonthlyChart(startYear, assetFilter) {
+        if (!monthlyChartEl) return;
+        var yearEntry = byYear[startYear] || { rows: [] };
+        var monthRows = yearEntry.rows.filter(function (r) {
+          if (r.month == null) return false;
+          if (assetFilter && r.propertyId !== assetFilter) return false;
+          return true;
+        });
+
+        // Always 12 columns, April through March, even for months with
+        // nothing recorded — same convention as the Receipts & Invoices
+        // chart (assets/receipts.js), so a gap reads as "nothing that
+        // month," not a missing bar.
+        var months = FY_MONTH_ORDER.map(function (m) {
+          var calYear = m >= 4 ? startYear : startYear + 1;
+          return { month: m, label: MONTH_ABBR[m], calYear: calYear, income: 0, expense: 0 };
+        });
+        monthRows.forEach(function (r) {
+          var slot = months[FY_MONTH_ORDER.indexOf(r.month)];
+          if (!slot) return;
+          if (r.type === 'Outgoing') slot.expense += r.amount; else slot.income += r.amount;
+        });
+
+        var undated = yearEntry.rows.filter(function (r) { return r.month == null && (!assetFilter || r.propertyId === assetFilter); }).length;
+
+        if (monthRows.length === 0 && undated === 0) {
+          monthlyChartEl.innerHTML = '<p>Nothing recorded for this financial year yet.</p>';
+          return;
+        }
+
+        // Both series share one £ axis (never a dual-axis chart) — the
+        // tallest bar of either series, across the whole year, sets the
+        // scale for every bar, income and expense alike.
+        var maxVal = months.reduce(function (m, mo) { return Math.max(m, mo.income, mo.expense); }, 0);
+        var maxHeight = 180;
+        function heightPx(v) { return v > 0 && maxVal > 0 ? Math.max(4, Math.round((v / maxVal) * maxHeight)) : 0; }
+
+        // Only the single tallest bar in the whole chart gets a direct
+        // "£X" label (selective direct labels, not one on every bar) —
+        // every bar's exact figure is still available via its tooltip.
+        var peak = { month: null, series: null, value: -1 };
+        months.forEach(function (mo) {
+          if (mo.income > peak.value) peak = { month: mo.month, series: 'income', value: mo.income };
+          if (mo.expense > peak.value) peak = { month: mo.month, series: 'expense', value: mo.expense };
+        });
+
+        var barsHtml = months.map(function (mo) {
+          var isPeakIncome = peak.month === mo.month && peak.series === 'income' && mo.income > 0;
+          var isPeakExpense = peak.month === mo.month && peak.series === 'expense' && mo.expense > 0;
+          return (
+            '<div class="chart-bar-col">' +
+              '<div class="chart-bar-track-grouped" aria-label="' + escapeHtml(mo.label + ' ' + mo.calYear + ': income ' + formatCurrency(mo.income) + ', expenses ' + formatCurrency(mo.expense)) + '">' +
+                (isPeakIncome || isPeakExpense ? '<div class="chart-bar-value">' + escapeHtml(formatCurrency(peak.value)) + '</div>' : '') +
+                '<div class="chart-bar chart-bar-income" tabindex="0" style="height:' + heightPx(mo.income) + 'px;">' +
+                  '<span class="chart-bar-tooltip">Income, ' + escapeHtml(mo.label) + ' ' + mo.calYear + ': ' + escapeHtml(formatCurrency(mo.income)) + '</span>' +
+                '</div>' +
+                '<div class="chart-bar chart-bar-expense" tabindex="0" style="height:' + heightPx(mo.expense) + 'px;">' +
+                  '<span class="chart-bar-tooltip">Expenses, ' + escapeHtml(mo.label) + ' ' + mo.calYear + ': ' + escapeHtml(formatCurrency(mo.expense)) + '</span>' +
+                '</div>' +
+              '</div>' +
+              '<div class="chart-bar-label">' + escapeHtml(mo.label) + '</div>' +
+            '</div>'
+          );
+        }).join('');
+
+        monthlyChartEl.innerHTML =
+          '<div class="chart-legend">' +
+            '<span class="chart-legend-item"><span class="chart-legend-swatch chart-legend-income"></span>Income</span>' +
+            '<span class="chart-legend-item"><span class="chart-legend-swatch chart-legend-expense"></span>Expenses</span>' +
+          '</div>' +
+          '<div class="chart-wrap">' + barsHtml + '</div><div class="chart-baseline"></div>' +
+          (undated > 0 ? '<p class="chart-empty">' + undated + ' record' + (undated === 1 ? '' : 's') + ' this year ' + (undated === 1 ? 'has' : 'have') + ' no date, so ' + (undated === 1 ? "isn't" : "aren't") + ' shown here — everything else on this page still counts ' + (undated === 1 ? 'it' : 'them') + '.</p>' : '');
+      }
+
+      var currentStartYear = years[0].startYear;
+      renderForYear(currentStartYear);
+      renderMonthlyChart(currentStartYear, monthlyAssetSelect ? monthlyAssetSelect.value : '');
+      fySelect.addEventListener('change', function () {
+        currentStartYear = parseInt(fySelect.value, 10);
+        renderForYear(currentStartYear);
+        renderMonthlyChart(currentStartYear, monthlyAssetSelect ? monthlyAssetSelect.value : '');
+      });
+      if (monthlyAssetSelect) {
+        monthlyAssetSelect.addEventListener('change', function () {
+          renderMonthlyChart(currentStartYear, monthlyAssetSelect.value);
+        });
+      }
 
       // Trend across every financial year on record, most recent first —
       // the same shape as each property's own Income & Outgoings chart

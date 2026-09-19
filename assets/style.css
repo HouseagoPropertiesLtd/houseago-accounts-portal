@@ -18,6 +18,13 @@
   --radius: 4px;
   --navy-grad: linear-gradient(135deg, #0d1521 0%, #24375b 100%);
   --rose-grad: linear-gradient(135deg, #7b3f34 0%, #c4a296 100%);
+  /* Income/expense pair for the monthly chart — computed with the dataviz
+     skill's validate_palette.js (colorblind-safe, checked against this
+     surface) rather than picked by eye; the dark-mode pair below is a
+     separate, independently-validated pair against the dark surface, not an
+     automatic flip of this one. */
+  --chart-income: #1f7a4d;
+  --chart-expense: #9a5b00;
 }
 
 * { box-sizing: border-box; }
@@ -641,6 +648,44 @@ form.form-card select {
 .chart-baseline { border-top: 1px solid var(--line); margin-top: 0; }
 .chart-empty { color: var(--ink-soft); font-size: 0.9rem; }
 
+/* Two-series (income/expense) legend — always shown alongside the grouped
+   monthly chart, per the dataviz skill's rule that colour never stands
+   alone as the only way to tell series apart. */
+.chart-legend { display: flex; gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.chart-legend-swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+.chart-legend-swatch.chart-legend-income { background: var(--chart-income); }
+.chart-legend-swatch.chart-legend-expense { background: var(--chart-expense); }
+
+/* Grouped variant of .chart-bar-track: two narrower bars (income, expense)
+   side by side per month instead of one. */
+.chart-bar-track-grouped {
+  width: 100%;
+  max-width: 48px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 180px;
+  position: relative;
+}
+.chart-bar-track-grouped .chart-bar-value {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.chart-bar-track-grouped .chart-bar { max-width: 18px; }
+.chart-bar-income { background: var(--chart-income); }
+.chart-bar-expense { background: var(--chart-expense); }
+
 /* ---------- Footer ---------- */
 footer.site-footer { background: var(--navy-grad); color: rgba(255,255,255,0.72); padding: 40px 0 24px; }
 footer.site-footer a { color: rgba(255,255,255,0.68); }
@@ -719,3 +764,19 @@ body.theme-dark form.form-card input::placeholder { color: rgba(245, 241, 234, 0
    contrast against whatever it's floating over — so only its accent
    colour needs to move off var(--navy) (now a light rose in this theme). */
 body.theme-dark .chart-bar-tooltip { background: #0d1521; }
+
+/* .btn-primary is normally the navy gradient, which is exactly the page's
+   own background colour on a dark-theme page — so on these pages it needs
+   a distinct, warm accent colour instead, dark enough text to stay legible
+   against it (contrast ratio ~6.6:1, comfortably AA/AAA). */
+body.theme-dark .btn-primary {
+  background: #d89b53;
+  color: #152238;
+}
+body.theme-dark .btn-primary:hover { background: #c07f3a; }
+
+/* The monthly income/expense chart's colour pair, independently validated
+   against this dark surface (not a flip of the light-mode pair above). */
+body.theme-dark { --chart-income: #3fa876; --chart-expense: #cc7a3d; }
+body.theme-dark .chart-legend-swatch.chart-legend-income { background: var(--chart-income); }
+body.theme-dark .chart-legend-swatch.chart-legend-expense { background: var(--chart-expense); }
