@@ -915,7 +915,7 @@
               if (years.length > 0) {
                 filterRow.hidden = false;
                 yearSelect.innerHTML = '<option value="">All years</option>' +
-                  years.map(function (y) { return '<option value="' + y + '">' + y + '</option>'; }).join('');
+                  years.map(function (y) { return '<option value="' + escapeAttr(y) + '">' + escapeHtml(y) + '</option>'; }).join('');
                 yearSelect.onchange = function () {
                   renderDocList(listEl, docs, yearSelect.value, entityId, uploadableIds, entityIds, session);
                 };

@@ -56,6 +56,15 @@
     return div.innerHTML;
   }
 
+  // escapeHtml alone is only safe for text content — it doesn't touch quote
+  // characters, so a value from an untrusted source (a bank-statement scan
+  // candidate, a document's year) can still break out of a double-quoted
+  // HTML attribute like value="..." even after escapeHtml. Use this instead
+  // wherever a value lands inside an attribute, not text content.
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function docIconSvg() {
     return '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
   }
@@ -557,9 +566,9 @@
           results.innerHTML = candidates.map(function (c, i) {
             return (
               '<div class="scan-candidate" data-candidate="' + i + '">' +
-                '<input type="text" data-cand-desc value="' + escapeHtml(c.description) + '">' +
-                '<input type="number" step="0.01" data-cand-amount value="' + c.amount + '">' +
-                '<input type="text" data-cand-date placeholder="dd/mm/yyyy" value="' + escapeHtml(c.date) + '">' +
+                '<input type="text" data-cand-desc value="' + escapeAttr(c.description) + '">' +
+                '<input type="number" step="0.01" data-cand-amount value="' + escapeAttr(c.amount) + '">' +
+                '<input type="text" data-cand-date placeholder="dd/mm/yyyy" value="' + escapeAttr(c.date) + '">' +
                 '<button type="button" class="btn btn-outline" data-cand-add>Add as income</button>' +
               '</div>'
             );
@@ -676,7 +685,7 @@
           yearSelect.innerHTML = '<option value="">No labelled years yet</option>';
           return;
         }
-        yearSelect.innerHTML = years.map(function (y) { return '<option value="' + escapeHtml(y) + '">' + escapeHtml(y) + '</option>'; }).join('');
+        yearSelect.innerHTML = years.map(function (y) { return '<option value="' + escapeAttr(y) + '">' + escapeHtml(y) + '</option>'; }).join('');
         downloadBtn.disabled = false;
       });
 
@@ -847,7 +856,7 @@
           if (filterRow && yearSelect) {
             if (years.length > 0) {
               filterRow.hidden = false;
-              yearSelect.innerHTML = '<option value="">All years</option>' + years.map(function (y) { return '<option value="' + escapeHtml(y) + '">' + escapeHtml(y) + '</option>'; }).join('');
+              yearSelect.innerHTML = '<option value="">All years</option>' + years.map(function (y) { return '<option value="' + escapeAttr(y) + '">' + escapeHtml(y) + '</option>'; }).join('');
               yearSelect.onchange = function () { renderDocList(listEl, docs, yearSelect.value, entityId, accessById, entityIds, session); };
             } else {
               filterRow.hidden = true;

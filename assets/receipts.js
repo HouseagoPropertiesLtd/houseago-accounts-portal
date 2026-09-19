@@ -50,6 +50,14 @@
     return div.innerHTML;
   }
 
+  // escapeHtml alone is only safe for text content — it doesn't touch quote
+  // characters, so a value from an untrusted source can still break out of
+  // a double-quoted HTML attribute like value="..." even after escapeHtml.
+  // Use this instead wherever a value lands inside an attribute.
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function formatDate(iso) {
     if (!iso) return '';
     try {
@@ -940,7 +948,7 @@
             .sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
 
           relatedSelect.innerHTML = '<option value="">General / Other</option>' +
-            options.map(function (e) { return '<option value="' + e.id + '">' + escapeHtml(e.name) + '</option>'; }).join('');
+            options.map(function (e) { return '<option value="' + escapeAttr(e.id) + '">' + escapeHtml(e.name) + '</option>'; }).join('');
         });
     }
 
@@ -1053,7 +1061,7 @@
             if (years.length > 0) {
               yearFilterRow.hidden = false;
               yearSelect.innerHTML = '<option value="">All years</option>' +
-                years.map(function (y) { return '<option value="' + y + '">' + y + '</option>'; }).join('');
+                years.map(function (y) { return '<option value="' + escapeAttr(y) + '">' + escapeHtml(y) + '</option>'; }).join('');
               yearSelect.onchange = function () {
                 renderReceiptList(docs, yearSelect.value, canUpload, namesById);
               };

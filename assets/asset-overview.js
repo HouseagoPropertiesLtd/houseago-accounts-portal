@@ -48,6 +48,14 @@
     return div.innerHTML;
   }
 
+  // escapeHtml alone is only safe for text content — it doesn't touch quote
+  // characters, so a value from an untrusted source can still break out of
+  // a double-quoted HTML attribute like value="..." even after escapeHtml.
+  // Use this instead wherever a value lands inside an attribute.
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function formatCurrency(n) {
     var sign = n < 0 ? '-' : '';
     return sign + '£' + Math.abs(n).toFixed(2);
@@ -434,7 +442,7 @@
         });
         var assetKeys = Object.keys(assetTotals).sort(function (a, b) { return assetTotals[b] - assetTotals[a]; });
         monthlyAssetSelect.innerHTML = '<option value="">Whole portfolio</option>' +
-          assetKeys.map(function (key) { return '<option value="' + escapeHtml(key) + '">' + escapeHtml(labelForPropertyId(key)) + '</option>'; }).join('');
+          assetKeys.map(function (key) { return '<option value="' + escapeAttr(key) + '">' + escapeHtml(labelForPropertyId(key)) + '</option>'; }).join('');
       }
 
       function renderMonthlyChart(startYear, assetFilter) {
@@ -488,7 +496,7 @@
           var isPeakExpense = peak.month === mo.month && peak.series === 'expense' && mo.expense > 0;
           return (
             '<div class="chart-bar-col">' +
-              '<div class="chart-bar-track-grouped" aria-label="' + escapeHtml(mo.label + ' ' + mo.calYear + ': income ' + formatCurrency(mo.income) + ', expenses ' + formatCurrency(mo.expense)) + '">' +
+              '<div class="chart-bar-track-grouped" aria-label="' + escapeAttr(mo.label + ' ' + mo.calYear + ': income ' + formatCurrency(mo.income) + ', expenses ' + formatCurrency(mo.expense)) + '">' +
                 (isPeakIncome || isPeakExpense ? '<div class="chart-bar-value">' + escapeHtml(formatCurrency(peak.value)) + '</div>' : '') +
                 '<div class="chart-bar chart-bar-income" tabindex="0" style="height:' + heightPx(mo.income) + 'px;">' +
                   '<span class="chart-bar-tooltip">Income, ' + escapeHtml(mo.label) + ' ' + mo.calYear + ': ' + escapeHtml(formatCurrency(mo.income)) + '</span>' +
