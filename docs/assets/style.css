@@ -176,14 +176,6 @@ section { padding: 60px 0; }
 .section-head { max-width: 640px; margin: 0 auto 40px; text-align: center; }
 .section-head.left { margin: 0 0 28px; text-align: left; }
 
-.bg-navy {
-  background: var(--navy-grad);
-  color: rgba(255,255,255,0.8);
-}
-.bg-navy h1, .bg-navy h2, .bg-navy h3 { color: var(--alabaster); }
-.bg-navy p { color: rgba(255,255,255,0.72); }
-.bg-navy .eyebrow { color: var(--rose); }
-
 .bg-panel { background: var(--sandstone); }
 
 /* ---------- Portal login ---------- */
@@ -726,8 +718,7 @@ footer.site-footer a:hover { color: var(--rose); }
    the hardcoded status-pill colours, a couple of hover states, and a
    handful of components with their own literal (non-token) colours -
    document-type icons, tags, form fields, the MFA setup key box, and the
-   chart-bar tooltip - need their own rules below, same as .bg-navy
-   already does elsewhere on the site for the same underlying reason. */
+   chart-bar tooltip - need their own rules below for the same reason. */
 body.theme-dark {
   --ink: #f5f1ea;
   --ink-soft: rgba(245, 241, 234, 0.74);
