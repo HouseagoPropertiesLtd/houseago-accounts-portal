@@ -14,6 +14,21 @@
 // logged-in password change (security.html), not to this recovery flow,
 // since clicking the emailed link is itself the proof of identity.
 //
+// One thing the recovery link does NOT do on its own: clicking the email
+// link only ever proves the address, so Supabase starts the recovery
+// session at aal1 (password-only) even for an account that already has a
+// verified authenticator app — and since 2FA is compulsory here
+// (supabase-schema.sql's mfa_ok()), Supabase's own server-side rule
+// refuses to let an aal1 session call updateUser({password}) at all once
+// a verified factor exists ("AAL2 session is required to update email or
+// password when MFA is enable[d]" — a real Supabase error, previously
+// shown to the person verbatim, unexplained). So for anyone who has
+// already set up 2FA, this page needs an extra step before the password
+// form: challenge that factor the same way index.html's login flow does,
+// which elevates the recovery session to aal2, and only then is
+// updateUser() allowed to succeed. An account with no factor yet (first
+// login ever) skips straight to the password form, same as before.
+//
 // Falls back to a sample preview until assets/supabase-config.js has real
 // values in it, same as the rest of the site (see SETUP.md).
 
@@ -38,15 +53,35 @@
     client.auth.onAuthStateChange(function (event) {
       if (event === 'PASSWORD_RECOVERY') {
         recoveryReady = true;
-        if (document.readyState !== 'loading') showForm();
+        if (document.readyState !== 'loading') proceedAfterRecovery();
+      }
+    });
+  }
+
+  // Decides whether the recovery session can go straight to the password
+  // form, or needs an MFA code first — see the note at the top of this
+  // file. nextLevel is what the session COULD reach given the factors on
+  // this account; currentLevel is where it actually is right now. They
+  // only differ when a verified factor exists and this particular session
+  // (the recovery one) hasn't cleared a challenge for it yet.
+  function proceedAfterRecovery() {
+    client.auth.mfa.getAuthenticatorAssuranceLevel().then(function (result) {
+      var data = result.data;
+      if (result.error || !data) { showForm(); return; }
+      if (data.nextLevel === 'aal2' && data.currentLevel !== 'aal2') {
+        showMfaForm();
+      } else {
+        showForm();
       }
     });
   }
 
   function showForm() {
     var intro = document.getElementById('reset-intro');
+    var mfaForm = document.getElementById('reset-mfa-form');
     var form = document.getElementById('reset-password-form');
     if (intro) intro.hidden = true;
+    if (mfaForm) mfaForm.hidden = true;
     if (form) {
       form.hidden = false;
       var first = document.getElementById('reset-password-1');
@@ -54,10 +89,23 @@
     }
   }
 
+  function showMfaForm() {
+    var intro = document.getElementById('reset-intro');
+    var mfaForm = document.getElementById('reset-mfa-form');
+    if (intro) intro.hidden = true;
+    if (mfaForm) {
+      mfaForm.hidden = false;
+      var codeInput = document.getElementById('reset-mfa-code');
+      if (codeInput) codeInput.focus();
+    }
+  }
+
   function showInvalid() {
     var intro = document.getElementById('reset-intro');
+    var mfaForm = document.getElementById('reset-mfa-form');
     var invalid = document.getElementById('reset-invalid');
     if (intro) intro.hidden = true;
+    if (mfaForm) mfaForm.hidden = true;
     if (invalid) invalid.hidden = false;
   }
 
@@ -74,8 +122,64 @@
       return;
     }
 
+    var mfaForm = document.getElementById('reset-mfa-form');
+    if (mfaForm) {
+      mfaForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var code = document.getElementById('reset-mfa-code').value.trim();
+        var mfaErrorBox = document.getElementById('reset-mfa-error');
+        var submitBtn = mfaForm.querySelector('button[type="submit"]');
+
+        if (mfaErrorBox) mfaErrorBox.hidden = true;
+        if (!code) return;
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Verifying…'; }
+
+        client.auth.mfa.listFactors().then(function (factorsResult) {
+          // .data.all, not the pre-grouped .data.totp — see the security
+          // review's note on this SDK quirk (auth.js/security.js use the
+          // same fix).
+          var allFactors = (factorsResult.data && factorsResult.data.all) || [];
+          var factor = allFactors.filter(function (f) { return f.factor_type === 'totp' && f.status === 'verified'; })[0];
+          if (factorsResult.error || !factor) {
+            if (mfaErrorBox) {
+              mfaErrorBox.textContent = 'Could not find your authenticator app. Please request a new reset link, or contact Oscar.';
+              mfaErrorBox.hidden = false;
+            }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Verify and continue'; }
+            return;
+          }
+
+          client.auth.mfa.challenge({ factorId: factor.id }).then(function (challengeResult) {
+            if (challengeResult.error) {
+              if (mfaErrorBox) {
+                mfaErrorBox.textContent = 'Something went wrong. Please try again.';
+                mfaErrorBox.hidden = false;
+              }
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Verify and continue'; }
+              return;
+            }
+
+            client.auth.mfa.verify({ factorId: factor.id, challengeId: challengeResult.data.id, code: code }).then(function (verifyResult) {
+              if (verifyResult.error) {
+                if (mfaErrorBox) {
+                  mfaErrorBox.textContent = 'That code was not recognised. Please check your authenticator app and try again.';
+                  mfaErrorBox.hidden = false;
+                }
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Verify and continue'; }
+                document.getElementById('reset-mfa-code').value = '';
+                document.getElementById('reset-mfa-code').focus();
+                return;
+              }
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Verify and continue'; }
+              showForm();
+            });
+          });
+        });
+      });
+    }
+
     if (recoveryReady) {
-      showForm();
+      proceedAfterRecovery();
     } else {
       // Give the client library a few seconds to parse the link and fire
       // PASSWORD_RECOVERY. If nothing has happened by then, the link was
