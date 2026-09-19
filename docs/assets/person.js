@@ -536,7 +536,12 @@
         '<div class="form-card statement-scan" data-statement-scan="' + entityId + '">' +
           '<div class="section-subhead">Or scan a bank statement for rent payments</div>' +
           '<p>Upload a bank statement (PDF or photo) and this looks for lines mentioning &ldquo;rent&rdquo; alongside an amount, so you can add them as income entries without retyping every line. It is a first pass, not a real bank-statement reader - every suggestion is shown for you to check, edit, or discard before anything is saved, and nothing here reads or stores the statement itself, only what you choose to add below.</p>' +
-          '<input type="file" accept="application/pdf,image/*" data-scan-file>' +
+          '<div class="capture-row">' +
+            '<button type="button" class="btn btn-outline" data-scan-capture-btn>Take a photo</button>' +
+            '<button type="button" class="btn btn-outline" data-scan-choose-btn>Choose a file</button>' +
+          '</div>' +
+          '<input type="file" accept="image/*" capture="environment" data-scan-camera hidden>' +
+          '<input type="file" accept="application/pdf,image/*" data-scan-file hidden>' +
           '<p class="form-status" role="status" data-scan-status></p>' +
           '<div data-scan-results></div>' +
         '</div>'
@@ -547,11 +552,16 @@
       var panel = sectionsEl.querySelector('[data-statement-scan="' + entityId + '"]');
       if (!panel) return;
       var fileInput = panel.querySelector('[data-scan-file]');
+      var cameraInput = panel.querySelector('[data-scan-camera]');
+      var captureBtn = panel.querySelector('[data-scan-capture-btn]');
+      var chooseBtn = panel.querySelector('[data-scan-choose-btn]');
       var status = panel.querySelector('[data-scan-status]');
       var results = panel.querySelector('[data-scan-results]');
 
-      fileInput.addEventListener('change', function () {
-        var file = fileInput.files[0];
+      if (captureBtn && cameraInput) captureBtn.addEventListener('click', function () { cameraInput.click(); });
+      if (chooseBtn && fileInput) chooseBtn.addEventListener('click', function () { fileInput.click(); });
+
+      function handleFile(file) {
         if (!file) return;
         results.innerHTML = '';
         status.textContent = 'Reading statement…';
@@ -603,7 +613,10 @@
         }).catch(function () {
           status.textContent = 'Could not read that file. You can still add entries by hand below.';
         });
-      });
+      }
+
+      fileInput.addEventListener('change', function () { handleFile(fileInput.files[0]); });
+      if (cameraInput) cameraInput.addEventListener('change', function () { handleFile(cameraInput.files[0]); });
     }
 
     function loadIncomeChart(entityId, propertyId) {
