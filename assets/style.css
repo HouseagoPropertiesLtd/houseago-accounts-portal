@@ -525,6 +525,24 @@ form.form-card select {
 .category-row:last-child { border-bottom: none; }
 .category-row span:last-child { font-weight: 700; }
 
+/* ---------- Stat tiles (Financial Summary overview cards) ---------------- */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 18px 0 28px;
+}
+.stat-tile {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+}
+.stat-tile-label { font-size: 0.76rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--rose-deep); font-weight: 700; margin-bottom: 8px; }
+.stat-tile-value { font-family: Fraunces, Garamond, Baskerville, "Times New Roman", serif; font-size: clamp(1.5rem, 2.6vw, 1.9rem); color: var(--ink); }
+.stat-tile-value.positive { color: #1f7a4d; }
+.stat-tile-value.negative { color: #b3261e; }
+
 .income-chart { margin-bottom: 18px; }
 .income-year-row {
   display: flex;

@@ -19,7 +19,7 @@
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Asset Overview | Houseago Asset Management</title>
+<title>Financial Summary | Houseago Asset Management</title>
 <meta name="description" content="Private document portal for Houseago Properties Ltd, sole trader and property accounts.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -43,7 +43,6 @@
       <span class="brand-word"><span class="brand-word-1">Houseago</span><span class="brand-word-2">Asset Management</span></span>
     </a>
     <div class="header-actions">
-      <a href="financial-dashboard.html" class="btn btn-outline">Financial Summary</a>
       <a href="security.html" class="btn btn-outline">Security</a>
       <a href="index.html" class="btn btn-outline" data-portal-logout>Log out</a>
     </div>
@@ -53,27 +52,44 @@
 <section class="bg-panel" style="padding-top:36px;">
   <div class="container">
 
-    <div class="portal-topbar">
-      <div class="portal-user">
-        <div class="portal-avatar" id="portal-avatar">A</div>
-        <div>
-          <div style="font-weight:700; color:var(--ink);">Welcome back, <span id="portal-welcome-name">there</span></div>
-          <div style="font-size:0.85rem;" id="portal-user-email"></div>
-        </div>
-      </div>
-      <a href="index.html" class="btn btn-outline" data-portal-logout>Log out</a>
-    </div>
+    <p style="margin-bottom:28px;"><a href="dashboard.html" style="font-weight:700; color:var(--navy);">&larr; Asset Overview</a></p>
 
     <div class="section-head left">
-      <p class="eyebrow">Asset Overview</p>
-      <h2>Your accounts and properties, in one place</h2>
-      <p>Each section below is a company, sole trader account, or property you have access to. Upload documents where you can, and download anything already there. Looking for the numbers instead? See the <a href="financial-dashboard.html" style="font-weight:700; color:var(--navy); text-decoration:underline;">Financial Summary</a>.</p>
+      <p class="eyebrow">Financial Summary</p>
+      <h2>How the portfolio is doing</h2>
+      <p>Income, expenses, and net profit across every property and account you have access to — pulled together from each property's Income &amp; Outgoings ledger and everyone's Receipts &amp; Invoices. A guide, not a substitute for your accounts.</p>
     </div>
 
-    <div id="expiring-soon-banner" class="expiring-banner" hidden></div>
+    <div id="fd-empty" class="entity-card" hidden>
+      <p>Nothing recorded yet. Add income and outgoings on a property's own page, or submit a receipt or invoice, to see a summary here.</p>
+    </div>
 
-    <div id="entities-container">
-      <div class="entity-card"><p>Loading your sections&hellip;</p></div>
+    <div id="fd-main" hidden>
+
+      <div class="chart-controls-row" style="margin-bottom:0;">
+        <div class="chart-fy-picker">
+          <label for="fd-fy-select">Financial year</label>
+          <select id="fd-fy-select"></select>
+        </div>
+      </div>
+
+      <div id="fd-stat-tiles" class="stat-tiles"></div>
+
+      <div class="entity-card">
+        <div class="section-head left"><h2>Expenses by category</h2></div>
+        <div id="fd-category-breakdown"></div>
+      </div>
+
+      <div class="entity-card">
+        <div class="section-head left"><h2>By property</h2><p>This financial year, across everything you have access to.</p></div>
+        <div id="fd-property-breakdown" class="income-chart"></div>
+      </div>
+
+      <div class="entity-card">
+        <div class="section-head left"><h2>Income &amp; outgoings by year</h2><p>Every financial year on record, most recent first.</p></div>
+        <div id="fd-trend" class="income-chart"></div>
+      </div>
+
     </div>
 
   </div>
@@ -88,13 +104,8 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-<script src="assets/pdf-convert.js"></script>
-<script src="assets/doc-scan.js"></script>
 <script src="assets/supabase-config.js"></script>
 <script src="assets/pwa.js"></script>
-<script src="assets/auth.js"></script>
+<script src="assets/financial-dashboard.js"></script>
 </body>
 </html>
