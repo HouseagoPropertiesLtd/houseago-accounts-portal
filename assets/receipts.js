@@ -114,6 +114,79 @@
     return null;
   }
 
+  // ---- Falling back to the products purchased, when nothing else names it
+  // Neither the category guess nor a plausible first line always finds
+  // something — a faded till receipt, a logo instead of a printed store
+  // name, or a first line that OCR simply couldn't read. When that
+  // happens, the itemised list is usually still there and still readable,
+  // so read it: a line that looks like "<product name> ... <price>" is a
+  // purchased item, unless it's actually a subtotal/tax/change/tender line
+  // that happens to have the same shape. What was actually bought is a
+  // genuinely useful name and description on its own, and can also point
+  // at a category the whole-document keyword match missed.
+  var LINE_ITEM_RE = /^(.{2,40}?)\s+£?\s?(\d{1,3}(?:,\d{3})*\.\d{2})\s*$/;
+  var LINE_ITEM_EXCLUDE = /^(sub ?total|total|amount due|balance|change|cash|card|tender(ed)?|vat|tax|gratuity|tip|discount|saving|loyalty|points)/i;
+
+  function extractPurchasedItems(text) {
+    if (!text) return [];
+    var items = [];
+    text.split(/\r?\n/).forEach(function (line) {
+      var trimmed = line.replace(/\s+/g, ' ').trim();
+      if (!trimmed) return;
+      var m = trimmed.match(LINE_ITEM_RE);
+      if (!m) return;
+      var name = m[1].trim();
+      if (name.length < 2 || LINE_ITEM_EXCLUDE.test(name)) return;
+      items.push({ name: name, amount: parseFloat(m[2].replace(/,/g, '')) });
+    });
+    return items;
+  }
+
+  // Joins item names in descending price order — the priciest item first,
+  // as usually the one worth naming the receipt after — stopping once
+  // adding the next name would push past maxLen, rather than cutting a
+  // name off mid-word.
+  function joinItemNames(names, maxLen) {
+    var result = names[0];
+    for (var i = 1; i < names.length; i++) {
+      var next = result + ', ' + names[i];
+      if (next.length > maxLen) break;
+      result = next;
+    }
+    return result;
+  }
+
+  // The single place both the single-submission and bulk-upload paths go
+  // for a name/description: the category guess and the first-line guess
+  // first, and only once both of those have nothing to say, the products
+  // actually purchased — a short join for the Name field, a longer one for
+  // Description when it says more than the name alone already does.
+  function guessNameAndDescription(fields) {
+    if (fields.title) return { name: fields.title, description: null };
+    var firstLine = guessReceiptName(fields.text);
+    if (firstLine) return { name: firstLine, description: null };
+    var items = extractPurchasedItems(fields.text);
+    if (items.length === 0) return { name: null, description: null };
+    items.sort(function (a, b) { return b.amount - a.amount; });
+    var names = items.map(function (i) { return i.name; });
+    var shortName = joinItemNames(names, 60);
+    var fullDescription = joinItemNames(names, 200);
+    return { name: shortName, description: fullDescription !== shortName ? fullDescription : null };
+  }
+
+  // A second, narrower attempt at a category once the whole-document
+  // keyword match (guessDocType, run over everything OCR/the text layer
+  // found) has come back empty: the same keyword list, run just over the
+  // purchased-item names, in case that whole-document pass missed a match
+  // buried in noisy OCR text.
+  function guessCategoryFromItems(text) {
+    var items = extractPurchasedItems(text);
+    if (items.length === 0) return null;
+    var joined = items.map(function (i) { return i.name; }).join(' ');
+    var docType = window.HouseagoDocScan.guessDocType(joined);
+    return docType ? docType.category : null;
+  }
+
   // ---- Automatic crop: find roughly where the receipt is in a photo -----
   // This is a plain contrast/edge heuristic, not full document-scanner
   // perspective correction — it finds the largest contiguous band of high
@@ -515,6 +588,7 @@
     var previewImg = document.getElementById('receipt-preview-img');
     var useCropCheckbox = document.getElementById('receipt-use-crop');
     var nameInput = document.getElementById('receipt-name');
+    var descInput = document.getElementById('receipt-description');
     var dateInput = document.getElementById('receipt-date');
     var dateStatus = document.getElementById('receipt-date-status');
     var amountInput = document.getElementById('receipt-amount');
@@ -680,14 +754,15 @@
           session: currentSession,
           onProgress: function (done, total) { fileStatus.textContent = 'Uploading ' + done + ' of ' + total + '…'; },
           buildRow: function (fields, file) {
+            var guess = guessNameAndDescription(fields);
             return {
-              name: fields.title || guessReceiptName(fields.text) || file.name.replace(/\.[^.]+$/, ''),
+              name: guess.name || file.name.replace(/\.[^.]+$/, ''),
               year: fields.year || thisYear,
               doc_date: fields.date || null,
               amount: fields.amount != null ? Math.round(fields.amount * 100) / 100 : null,
-              notes: null,
+              notes: guess.description || null,
               related_entity_id: relatedEntityId,
-              expense_category: expenseCategoryChosen || fields.category || null,
+              expense_category: expenseCategoryChosen || fields.category || guessCategoryFromItems(fields.text),
               expense_type: expenseType
             };
           }
@@ -713,14 +788,19 @@
       } else {
         amountStatus.textContent = "Could not detect an amount automatically — please enter it if known.";
       }
-      var guessedName = fields.title || guessReceiptName(fields.text);
-      if (guessedName && nameInput && !nameInput.value) {
-        nameInput.value = guessedName;
-        trackAutofill(nameInput, guessedName);
+      var guess = guessNameAndDescription(fields);
+      if (guess.name && nameInput && !nameInput.value) {
+        nameInput.value = guess.name;
+        trackAutofill(nameInput, guess.name);
       }
-      if (fields.category && categorySelect && !categorySelect.value) {
-        var hasOption = Array.prototype.some.call(categorySelect.options, function (o) { return o.value === fields.category; });
-        if (hasOption) { categorySelect.value = fields.category; trackAutofill(categorySelect, fields.category); }
+      if (guess.description && descInput && !descInput.value) {
+        descInput.value = guess.description;
+        trackAutofill(descInput, guess.description);
+      }
+      var category = fields.category || guessCategoryFromItems(fields.text);
+      if (category && categorySelect && !categorySelect.value) {
+        var hasOption = Array.prototype.some.call(categorySelect.options, function (o) { return o.value === category; });
+        if (hasOption) { categorySelect.value = category; trackAutofill(categorySelect, category); }
       }
     }
 
@@ -993,11 +1073,11 @@
         var upload = currentUploadFile();
         if (!upload) { fileStatus.textContent = 'Please take a photo or choose a file first.'; return; }
 
-        var name = document.getElementById('receipt-name').value.trim();
+        var name = nameInput.value.trim();
         var date = dateInput.value;
         var amountRaw = amountInput.value;
         var amount = amountRaw !== '' ? Math.round(parseFloat(amountRaw) * 100) / 100 : null;
-        var description = document.getElementById('receipt-description').value.trim();
+        var description = descInput.value.trim();
         var relatedEntityId = relatedSelect.value || null;
         var expenseCategory = categorySelect.value || null;
         var expenseType = expenseTypeSelect ? (expenseTypeSelect.value || null) : null;
