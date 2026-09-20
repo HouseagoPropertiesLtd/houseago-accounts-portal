@@ -466,6 +466,16 @@
   // fail outright just because the upgraded path had a bad moment.
   var ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+  // The scan-receipt function itself gives up on Azure after 45s server-side,
+  // but a browser fetch with no timeout of its own can still hang far longer
+  // than that if the network or the function is having a bad moment (a
+  // dropped connection can sit "pending" for minutes). This bounds how long
+  // a receipt submission will ever wait on Azure before giving up and
+  // falling back to the free scan - comfortably longer than a normal Azure
+  // round trip, short enough that nobody submitting a receipt is left
+  // watching "reading..." for an unreasonable amount of time.
+  var AZURE_SCAN_TIMEOUT_MS = 30000;
+
   function postFileToScanReceiptFunction(file) {
     var keysConfigured =
       typeof SUPABASE_URL !== 'undefined' &&
@@ -474,6 +484,9 @@
     if (!keysConfigured) return Promise.resolve(null);
 
     try {
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = controller ? setTimeout(function () { controller.abort(); }, AZURE_SCAN_TIMEOUT_MS) : null;
+
       return fetch(SUPABASE_URL + '/functions/v1/scan-receipt', {
         method: 'POST',
         headers: {
@@ -481,11 +494,16 @@
           'apikey': SUPABASE_ANON_KEY,
           'Content-Type': file.type || 'application/octet-stream'
         },
-        body: file
+        body: file,
+        signal: controller ? controller.signal : undefined
       }).then(function (res) {
+        if (timer) clearTimeout(timer);
         if (!res.ok) return null; // includes the normal "not configured yet" case (501)
         return res.json().catch(function () { return null; });
-      }).catch(function () { return null; }); // offline, CORS, timeout, ... - never blocks the fallback below
+      }).catch(function () {
+        if (timer) clearTimeout(timer);
+        return null; // offline, CORS, a timed-out abort, ... - never blocks the fallback below
+      });
     } catch (e) {
       return Promise.resolve(null);
     }
