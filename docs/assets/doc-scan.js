@@ -444,6 +444,99 @@
     }).catch(function () { return { date: null, amount: null, year: null, title: null, category: null, entryType: null, text: '' }; });
   }
 
+  // ---- Azure-backed receipt scan (Receipts & Invoices only) --------------
+  // The generic scanFileForFields above (keyword/pattern matching over raw
+  // OCR text) is used everywhere on the site - compliance certificates,
+  // insurance policies, bank statements, payslips - and stays exactly as it
+  // is for all of that. A proper receipt has a much more regular shape
+  // (merchant name, a total, a date, line items), so for Receipts &
+  // Invoices specifically we first try the supabase/functions/scan-receipt
+  // Edge Function, which hands the file to Azure AI Document Intelligence's
+  // purpose-built receipt model and gets back already-parsed fields instead
+  // of raw text to guess over.
+  //
+  // This is entirely optional infrastructure: until AZURE_DOC_INTEL_ENDPOINT
+  // and AZURE_DOC_INTEL_KEY are set as secrets on that function (see
+  // SETUP.md), it replies { error: 'not_configured' } and
+  // scanFileForReceiptFields below falls straight back to the same free,
+  // fully client-side scan every other upload point on the site already
+  // uses - so receipts scanning keeps working, Azure configured or not.
+  // The same fallback applies to any other failure (offline, a timeout, an
+  // Azure error) - a person submitting a receipt should never see this
+  // fail outright just because the upgraded path had a bad moment.
+  var ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  function postFileToScanReceiptFunction(file) {
+    var keysConfigured =
+      typeof SUPABASE_URL !== 'undefined' &&
+      typeof SUPABASE_ANON_KEY !== 'undefined' &&
+      SUPABASE_URL.indexOf('YOUR_SUPABASE') !== 0;
+    if (!keysConfigured) return Promise.resolve(null);
+
+    try {
+      return fetch(SUPABASE_URL + '/functions/v1/scan-receipt', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'apikey': SUPABASE_ANON_KEY,
+          'Content-Type': file.type || 'application/octet-stream'
+        },
+        body: file
+      }).then(function (res) {
+        if (!res.ok) return null; // includes the normal "not configured yet" case (501)
+        return res.json().catch(function () { return null; });
+      }).catch(function () { return null; }); // offline, CORS, timeout, ... - never blocks the fallback below
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
+  // Turns Azure's already-structured result into the same shape
+  // scanFileForFields returns, so callers (receipts.js) don't need to know
+  // which path actually answered. Line items become a small synthetic
+  // "text" block (one "<description>  <amount>" line each) so the existing
+  // guessReceiptName/extractPurchasedItems/category fallbacks in
+  // receipts.js still have something to work with on the (rare) receipt
+  // where Azure found line items but no merchant name.
+  function mapAzureReceiptResult(azureResult) {
+    if (!azureResult || (!azureResult.merchant && !azureResult.date && azureResult.total == null)) return null;
+
+    var items = azureResult.items || [];
+    var itemsText = items
+      .filter(function (i) { return i && i.description; })
+      .map(function (i) { return i.description + (i.amount != null ? '  ' + i.amount.toFixed(2) : ''); })
+      .join('\n');
+    var scanText = (azureResult.merchant || '') + '\n' + itemsText;
+
+    var date = (typeof azureResult.date === 'string' && ISO_DATE_RE.test(azureResult.date)) ? azureResult.date : null;
+    var docType = guessDocType(scanText);
+
+    return {
+      date: date,
+      amount: (typeof azureResult.total === 'number') ? Math.round(azureResult.total * 100) / 100 : null,
+      year: date ? date.slice(0, 4) : null,
+      title: azureResult.merchant || (docType ? docType.title : null),
+      category: docType ? docType.category : null,
+      entryType: guessEntryType(scanText),
+      text: scanText
+    };
+  }
+
+  // The entry point receipts.js uses in place of scanFileForFields: Azure
+  // first (images/PDFs only - Azure's receipt model has nothing useful to
+  // do with anything else), the existing free OCR/text-layer scan whenever
+  // Azure isn't configured, fails, or comes back with nothing usable.
+  function scanFileForReceiptFields(file) {
+    var eligible = file && (isImageFile(file) || isPdfFile(file));
+    if (!eligible) return scanFileForFields(file);
+
+    return postFileToScanReceiptFunction(file).then(function (azureResult) {
+      var mapped = mapAzureReceiptResult(azureResult);
+      if (mapped) return mapped;
+      return scanFileForFields(file);
+    }).catch(function () { return scanFileForFields(file); });
+  }
+
   // ---- Bank-statement rent scan (property/person Income sections) -------
   var INCOME_KEYWORDS = ['rent', 'rental'];
   var LINE_AMOUNT_RE = /£?\s?(\d{1,3}(?:,\d{3})*\.\d{2})\b/;
@@ -528,6 +621,13 @@
   // bulkUploadFiles(files, opts) -> Promise<{ uploaded, duplicates, skipped, failed }>
   // opts:
   //   client, entityId, session, bucket (default 'owner-documents')
+  //   scanFn(file) -> Promise<fields> - which scan engine to use for each
+  //     file, defaulting to the generic scanFileForFields. receipts.js
+  //     passes scanFileForReceiptFields here so a bulk batch of receipts
+  //     gets the same Azure-backed scan (with the same automatic fallback)
+  //     as a single receipt submission; every other bulk-upload point on
+  //     the site (property/person/auth) leaves this unset and keeps using
+  //     the generic scan, unaffected.
   //   buildRow(fields, file) -> the columns this file's row should have
   //     beyond entity_id/file_path/file_hash/uploaded_by (which this
   //     function always sets itself) - return a falsy value to skip the
@@ -540,6 +640,7 @@
     var client = opts.client;
     var entityId = opts.entityId;
     var bucket = opts.bucket || 'owner-documents';
+    var scanFn = opts.scanFn || scanFileForFields;
     var uploadedBy = (opts.session && opts.session.user) ? opts.session.user.id : null;
     var results = { uploaded: [], duplicates: [], skipped: [], failed: [] };
 
@@ -556,7 +657,7 @@
         return findDuplicateByHash(client, entityId, hash).then(function (existing) {
           if (existing) { report('duplicates', { file: file, existing: existing }); return; }
 
-          return scanFileForFields(file).then(function (fields) {
+          return scanFn(file).then(function (fields) {
             var extra = opts.buildRow ? opts.buildRow(fields, file) : {};
             if (!extra) { report('skipped', { file: file, fields: fields }); return; }
 
@@ -785,6 +886,7 @@
 
   window.HouseagoDocScan = {
     scanFileForFields: scanFileForFields,
+    scanFileForReceiptFields: scanFileForReceiptFields,
     extractTextFromFile: extractTextFromFile,
     extractLikelyIncomeLines: extractLikelyIncomeLines,
     parseLooseDate: parseLooseDate,

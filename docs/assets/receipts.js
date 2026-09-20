@@ -85,16 +85,18 @@
   // OCR/PDF-text reading and date/amount pattern matching lives in
   // assets/doc-scan.js, shared with every other upload point on the site.
 
-  // Reads whichever fields it can off a file: OCR for an image, the text
-  // layer (or OCR fallback) for a PDF. Runs once and mines both the date
-  // and the amount out of the same pass of text - the engine itself lives
-  // in assets/doc-scan.js, this just adapts its result to the
-  // {date, amount, title, category, text} shape this page uses, keeping
-  // the raw text too so guessReceiptName (below) has something to work
-  // with when the shared category guess comes up empty.
+  // Reads whichever fields it can off a file. This goes through
+  // window.HouseagoDocScan.scanFileForReceiptFields, which tries the
+  // Azure-backed receipt scan first (see assets/doc-scan.js) and falls back
+  // to the same free OCR/text-layer scan every other upload point on the
+  // site uses whenever Azure isn't configured or the attempt fails for any
+  // reason - so this page keeps working exactly as before either way.
+  // Adapts the result to the {date, amount, title, category, text} shape
+  // this page uses, keeping the raw text too so guessReceiptName (below)
+  // has something to work with when the category guess comes up empty.
   function scanFileForReceiptFields(fileOrBlob, isPdf, isImage) {
     if (!fileOrBlob || (!isPdf && !isImage)) return Promise.resolve({ date: null, amount: null, title: null, category: null, text: '' });
-    return window.HouseagoDocScan.scanFileForFields(fileOrBlob)
+    return window.HouseagoDocScan.scanFileForReceiptFields(fileOrBlob)
       .then(function (fields) { return { date: fields.date, amount: fields.amount, title: fields.title, category: fields.category, text: fields.text }; })
       .catch(function () { return { date: null, amount: null, title: null, category: null, text: '' }; });
   }
@@ -795,6 +797,7 @@
           client: client,
           entityId: ENTITY_ID,
           session: currentSession,
+          scanFn: window.HouseagoDocScan.scanFileForReceiptFields,
           onProgress: function (done, total) { fileStatus.textContent = 'Uploading ' + done + ' of ' + total + '…'; },
           buildRow: function (fields, file) {
             var guess = guessNameAndDescription(fields);
