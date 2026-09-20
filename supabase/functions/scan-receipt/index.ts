@@ -9,9 +9,11 @@
 // site's dev tools — they could then run up usage/cost against Oscar's
 // Azure account. This function is the one place that key is allowed to
 // exist: it runs on Supabase's own servers (like expiry-digest), reads the
-// key from a secret Supabase injects into its environment, and is only
-// ever reachable by a signed-in portal user (Supabase verifies their
-// session automatically before this code runs — see SETUP.md).
+// key from a secret Supabase injects into its environment, and checks the
+// caller's own session token (via supabase.auth.getUser) to confirm this
+// is a real signed-in portal user before ever touching Azure — not just
+// anyone holding the site's public anon key, which alone isn't proof of
+// sign-in (see SETUP.md).
 //
 // What it does NOT do: replace the client-side scanning in assets/doc-scan.js
 // and assets/receipts.js. That code still runs first, still works with no
@@ -45,6 +47,8 @@
 // or a non-200 with { error: '...' } — "not_configured" specifically means
 // "the secrets above aren't set yet", which the caller treats as "fall
 // back to the free path" rather than a real failure.
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const API_VERSION = '2024-11-30';
 const POLL_INTERVAL_MS = 1000;
@@ -139,6 +143,30 @@ Deno.serve(async (req) => {
   }
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'Use POST with the receipt image/PDF as the request body.' }, 405, origin);
+  }
+
+  // Supabase's platform-level "verify JWT" check (on by default for every
+  // Edge Function) only confirms the Authorization header is SOME validly
+  // -signed Supabase token — and the public anon key is itself a valid
+  // token of that kind. That key is meant to be public (it's printed in
+  // this site's own client-shipped JavaScript, same as always — see
+  // SETUP.md), so on its own it does NOT mean "a signed-in portal user
+  // made this request". Left unchecked, that would let anyone who finds
+  // this site's public URL call this function directly, with no account
+  // at all, and run through the shared Azure quota for nothing. This
+  // check confirms the token actually belongs to a real signed-in user,
+  // not just anyone holding the public key.
+  const authHeader = req.headers.get('authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const supabaseUrlForAuth = Deno.env.get('SUPABASE_URL');
+  const anonKeyForAuth = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!token || !supabaseUrlForAuth || !anonKeyForAuth) {
+    return jsonResponse({ error: 'Not signed in.' }, 401, origin);
+  }
+  const authClient = createClient(supabaseUrlForAuth, anonKeyForAuth);
+  const { data: authData, error: authError } = await authClient.auth.getUser(token);
+  if (authError || !authData?.user) {
+    return jsonResponse({ error: 'Not signed in.' }, 401, origin);
   }
 
   const endpoint = Deno.env.get('AZURE_DOC_INTEL_ENDPOINT');

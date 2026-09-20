@@ -476,12 +476,18 @@
   // watching "reading..." for an unreasonable amount of time.
   var AZURE_SCAN_TIMEOUT_MS = 30000;
 
-  function postFileToScanReceiptFunction(file) {
+  function postFileToScanReceiptFunction(file, accessToken) {
     var keysConfigured =
       typeof SUPABASE_URL !== 'undefined' &&
       typeof SUPABASE_ANON_KEY !== 'undefined' &&
       SUPABASE_URL.indexOf('YOUR_SUPABASE') !== 0;
-    if (!keysConfigured) return Promise.resolve(null);
+    // Azure scanning is reserved for a real, signed-in portal session - the
+    // function itself checks this server-side, but there's no point making
+    // the round trip at all without a real session token on hand (sample-
+    // preview mode, or a call that raced ahead of the session loading).
+    // The anon key is NOT a substitute here: it's meant to be public (see
+    // SETUP.md), so it isn't proof anyone signed in.
+    if (!keysConfigured || !accessToken) return Promise.resolve(null);
 
     try {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -490,7 +496,7 @@
       return fetch(SUPABASE_URL + '/functions/v1/scan-receipt', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + accessToken,
           'apikey': SUPABASE_ANON_KEY,
           'Content-Type': file.type || 'application/octet-stream'
         },
@@ -544,11 +550,11 @@
   // first (images/PDFs only - Azure's receipt model has nothing useful to
   // do with anything else), the existing free OCR/text-layer scan whenever
   // Azure isn't configured, fails, or comes back with nothing usable.
-  function scanFileForReceiptFields(file) {
+  function scanFileForReceiptFields(file, accessToken) {
     var eligible = file && (isImageFile(file) || isPdfFile(file));
     if (!eligible) return scanFileForFields(file);
 
-    return postFileToScanReceiptFunction(file).then(function (azureResult) {
+    return postFileToScanReceiptFunction(file, accessToken).then(function (azureResult) {
       var mapped = mapAzureReceiptResult(azureResult);
       if (mapped) return mapped;
       return scanFileForFields(file);
@@ -639,13 +645,16 @@
   // bulkUploadFiles(files, opts) -> Promise<{ uploaded, duplicates, skipped, failed }>
   // opts:
   //   client, entityId, session, bucket (default 'owner-documents')
-  //   scanFn(file) -> Promise<fields> - which scan engine to use for each
-  //     file, defaulting to the generic scanFileForFields. receipts.js
-  //     passes scanFileForReceiptFields here so a bulk batch of receipts
-  //     gets the same Azure-backed scan (with the same automatic fallback)
-  //     as a single receipt submission; every other bulk-upload point on
-  //     the site (property/person/auth) leaves this unset and keeps using
-  //     the generic scan, unaffected.
+  //   scanFn(file, accessToken) -> Promise<fields> - which scan engine to
+  //     use for each file, defaulting to the generic scanFileForFields
+  //     (which ignores the second argument). receipts.js passes
+  //     scanFileForReceiptFields here so a bulk batch of receipts gets the
+  //     same Azure-backed scan (with the same automatic fallback) as a
+  //     single receipt submission - accessToken (opts.session's own token)
+  //     is what proves to the scan-receipt function that this is a real
+  //     signed-in user, not just anyone holding the public anon key; every
+  //     other bulk-upload point on the site (property/person/auth) leaves
+  //     scanFn unset and keeps using the generic scan, unaffected.
   //   buildRow(fields, file) -> the columns this file's row should have
   //     beyond entity_id/file_path/file_hash/uploaded_by (which this
   //     function always sets itself) - return a falsy value to skip the
@@ -660,6 +669,7 @@
     var bucket = opts.bucket || 'owner-documents';
     var scanFn = opts.scanFn || scanFileForFields;
     var uploadedBy = (opts.session && opts.session.user) ? opts.session.user.id : null;
+    var accessToken = opts.session ? opts.session.access_token : null;
     var results = { uploaded: [], duplicates: [], skipped: [], failed: [] };
 
     function report(outcome, entry) {
@@ -675,7 +685,7 @@
         return findDuplicateByHash(client, entityId, hash).then(function (existing) {
           if (existing) { report('duplicates', { file: file, existing: existing }); return; }
 
-          return scanFn(file).then(function (fields) {
+          return scanFn(file, accessToken).then(function (fields) {
             var extra = opts.buildRow ? opts.buildRow(fields, file) : {};
             if (!extra) { report('skipped', { file: file, fields: fields }); return; }
 

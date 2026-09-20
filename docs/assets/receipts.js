@@ -96,7 +96,13 @@
   // has something to work with when the category guess comes up empty.
   function scanFileForReceiptFields(fileOrBlob, isPdf, isImage) {
     if (!fileOrBlob || (!isPdf && !isImage)) return Promise.resolve({ date: null, amount: null, title: null, category: null, text: '' });
-    return window.HouseagoDocScan.scanFileForReceiptFields(fileOrBlob)
+    // The real signed-in session's own token, not the public anon key - see
+    // assets/doc-scan.js's postFileToScanReceiptFunction for why that
+    // distinction matters. currentSession may still be null this early
+    // (the page's own getSession() call hasn't resolved yet) - Azure is
+    // simply skipped in that case and the free scan below handles it.
+    var accessToken = currentSession ? currentSession.access_token : null;
+    return window.HouseagoDocScan.scanFileForReceiptFields(fileOrBlob, accessToken)
       .then(function (fields) { return { date: fields.date, amount: fields.amount, title: fields.title, category: fields.category, text: fields.text }; })
       .catch(function () { return { date: null, amount: null, title: null, category: null, text: '' }; });
   }
