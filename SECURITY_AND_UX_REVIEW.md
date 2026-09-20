@@ -774,3 +774,95 @@ Both code fixes (11.2, 11.3) and the repo restructure (11.1) are pushed to
 the Pages source change (11.1) took effect within about a minute of being
 saved, verified by re-fetching the previously-public files and the live
 site itself afterwards.
+
+## 12. Full site sweep after adding Azure receipt scanning (20 Sep 2026)
+
+Requested as a "full site security test" the day after Azure AI Document
+Intelligence receipt scanning (`supabase/functions/scan-receipt`) was wired
+into Receipts & Invoices. Re-confirmed every protection from sections 6, 7,
+10, and 11 was still holding live (it was — see 12.2), then focused
+specifically on the newly added feature, since that's what changed. One
+real finding.
+
+### 12.1 Found and fixed: `scan-receipt` could be called by anyone, no account needed
+
+The function's own comment claimed it was "only ever reachable by a
+signed-in portal user," relying on Supabase's platform-level "verify JWT"
+check that's on by default for every Edge Function. That check only
+confirms the `Authorization` header is *some* validly-signed Supabase
+token — and the public anon key (printed openly in this site's own
+client-shipped JavaScript, by design, same as the site URL itself) is
+itself a valid token of exactly that kind. The client code
+(`doc-scan.js`'s `postFileToScanReceiptFunction`) was sending that anon
+key as the Authorization token on every call, rather than the actual
+signed-in user's own session token.
+
+Net effect: nobody needed an account at all. Anyone who found the site's
+public URL could open a browser console and call `scan-receipt` directly
+with just the anon key, with no login, and it would happily use up Oscar's
+Azure quota (the free tier's 500 pages/month) reading whatever image they
+sent it. Confirmed live: called the function with only the anon key, no
+session — got back a fully successful `200` with real merchant/date/total
+data read from a test image.
+
+This is a resource-exhaustion risk, not a data-leak one — the function
+never touches the database or Storage, it only proxies to Azure and
+returns what Azure reads back, so nothing about the family's actual
+documents or finances was ever exposed this way. But it meant a stranger
+could quietly exhaust the month's free Azure quota (or, if a paid tier
+were ever turned on, run up a real bill) for no reason at all, with zero
+authentication.
+
+**Fixed**: the function now calls `supabase.auth.getUser()` on the token
+it's given and rejects anything that doesn't resolve to a real, currently
+signed-in user — a `401 "Not signed in."` for a missing token, a garbage
+token, or (this is the part that was actually broken) the public anon key
+on its own. The client side (`doc-scan.js`, `receipts.js`) now sends the
+caller's own real session token instead of the anon key, threading it
+through both the single-photo capture flow and the bulk-upload flow;
+whenever no real session is on hand yet (sample-preview mode, or a call
+that raced ahead of the page's own session check), Azure is skipped
+entirely and the free local scan handles it, exactly like the existing
+"Azure not configured" fallback already did.
+
+**Re-tested live, end to end, after deploying the fix**: the anon-key-only
+request that previously succeeded now gets `401 {"error":"Not signed
+in."}`. A disposable test account (created via the Supabase dashboard,
+zero `portal_access` grants, deleted immediately after) was used to get a
+real session token via the password-grant endpoint — calling `scan-receipt`
+with that real token still works exactly as before, returning a correctly
+read `200` result. No account was left behind afterwards.
+
+### 12.2 Everything else re-confirmed live, still holding
+
+- `entities`, `portal_access`, and `entity_documents`: still `401`
+  permission denied with only the anon key, no session.
+- Storage bucket listing and object listing: still empty/denied with no
+  session.
+- `SECURITY_AND_UX_REVIEW.md`, `SETUP.md`, and `supabase-schema.sql`: still
+  `404` on the published site (the `docs/`-only Pages source from 11.1 is
+  still in effect).
+- Clickjacking guard: still present in the live `receipts.html`.
+- Every CDN script tag on `receipts.html` still carries a subresource-
+  integrity hash; `doc-scan.js`/`receipts.js` remain same-origin files with
+  no external hosting.
+- The new Azure integration doesn't introduce a fresh XSS path: OCR-derived
+  text from Azure (merchant name, line items - the same kind of externally
+  supplied content that caused the bank-statement bug in 11.2) only ever
+  reaches the page via `.value =` DOM property assignment (single-receipt
+  autofill) or via the database's existing, already-`escapeHtml`/
+  `escapeAttr`-protected rendering path (bulk upload) - never via
+  string-built `innerHTML`. Checked `doc-scan.js` and `receipts.js`
+  specifically for this before ruling it out, not assumed.
+- `expiry-digest` (the other Edge Function) was reviewed alongside
+  `scan-receipt` - it has no equivalent gap, since it's only ever invoked
+  by its own scheduled `pg_cron` job, not by anything reachable from a
+  browser with the anon key.
+
+### 12.3 Net result
+
+One real finding, fixed and confirmed live: `scan-receipt` now genuinely
+requires a signed-in portal session, not just the public key. Everything
+else audited in this pass - the core RLS/Storage/auth boundaries, the
+repo's public-file exposure, XSS, and supply-chain pinning - was
+re-verified live rather than assumed, and all of it still holds.
