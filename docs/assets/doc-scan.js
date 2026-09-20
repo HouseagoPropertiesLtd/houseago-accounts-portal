@@ -350,10 +350,47 @@
     });
   }
 
+  // Tesseract's own recognize() call has no time limit of its own - on a
+  // phone, especially with a large, full-resolution camera photo, it can
+  // take a very long time or effectively never finish (memory pressure on
+  // the device, not a network problem, so there's nothing to time out on
+  // the network side the way the Azure call already is). Without a bound
+  // here, a stall leaves the page showing "reading..." forever, with
+  // nothing to recover it - exactly the symptom this fixes. Generous but
+  // bounded: real recognitions normally finish in a few seconds even on a
+  // modest phone; this only kicks in for a genuine stall.
+  var OCR_TIMEOUT_MS = 25000;
+
+  function withTimeout(promise, ms, onTimeout) {
+    return new Promise(function (resolve) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        resolve(onTimeout());
+      }, ms);
+      promise.then(function (value) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      }, function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(onTimeout());
+      });
+    });
+  }
+
   function ocrText(imageSource) {
     if (typeof Tesseract === 'undefined') return Promise.resolve('');
     return preprocessForOcr(imageSource).then(function (prepared) {
-      return Tesseract.recognize(prepared, 'eng');
+      return withTimeout(
+        Tesseract.recognize(prepared, 'eng'),
+        OCR_TIMEOUT_MS,
+        function () { return null; } // timed out - treat exactly like "found nothing"
+      );
     }).then(function (result) { return (result && result.data && result.data.text) || ''; })
       .catch(function () { return ''; });
   }

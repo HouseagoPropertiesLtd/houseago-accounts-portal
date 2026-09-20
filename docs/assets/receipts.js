@@ -58,6 +58,38 @@
     return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // Safety net for the photo-capture/scan flow below: several steps in it
+  // (decoding the image, auto-cropping, Azure, the free local OCR) each try
+  // to guard against hanging forever on their own, but this is a last
+  // line of defence so a genuinely unforeseen stall on some device/browser
+  // still recovers within a bounded time - "reading..." is never left on
+  // screen indefinitely with no way forward. On timeout, whatever's true so
+  // far (the photo is already attached either way) just falls through to
+  // manual entry, exactly like a normal "couldn't read it" outcome.
+  var SCAN_SAFETY_TIMEOUT_MS = 40000;
+
+  function withSafetyTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        reject(new Error('timed out'));
+      }, ms);
+      promise.then(function (value) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      }, function (err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+  }
+
   function formatDate(iso) {
     if (!iso) return '';
     try {
@@ -716,7 +748,7 @@
         previewCard.hidden = false;
         previewImg.src = originalUrl;
 
-        autoCropImageFile(file).then(function (result) {
+        withSafetyTimeout(autoCropImageFile(file).then(function (result) {
           if (myGen !== captureGen) return; // a newer photo (or Clear) has since taken over - drop this stale result
           if (result && result.blob) {
             croppedBlob = result.blob;
@@ -731,13 +763,13 @@
             if (myGen !== captureGen) return; // stale - a newer capture/clear has already replaced this one
             applyScanResult(fields);
           });
-        }).catch(function () {
+        }), SCAN_SAFETY_TIMEOUT_MS).catch(function () {
           if (myGen !== captureGen) return;
           dateStatus.textContent = "Could not read that document automatically - the photo is still attached, please enter the date by hand.";
           amountStatus.textContent = 'You can enter the amount by hand if known.';
         });
       } else if (isPdf) {
-        scanFileForReceiptFields(file, true, false).then(function (fields) {
+        withSafetyTimeout(scanFileForReceiptFields(file, true, false), SCAN_SAFETY_TIMEOUT_MS).then(function (fields) {
           if (myGen !== captureGen) return;
           applyScanResult(fields);
         }).catch(function () {
