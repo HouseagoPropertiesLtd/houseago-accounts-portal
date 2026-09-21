@@ -980,28 +980,35 @@
       }
       currentSession = session;
 
-      client
-        .from('portal_access')
-        .select('can_upload')
-        .eq('entity_id', ENTITY_ID)
-        .maybeSingle()
-        .then(function (accessResult) {
-          if (accessResult.error || !accessResult.data) {
-            accessNote.hidden = false;
-            return;
-          }
+      // Both session rules - a completed 2FA challenge, and the 24-hour limit
+      // after which one is needed again - live in assets/session-policy.js,
+      // shared with every other signed-in page on the site.
+      window.HouseagoSession.guardSession(client, session).then(function (ok) {
+        if (!ok) return; // already on its way to the login page
 
-          var canUpload = !!accessResult.data.can_upload;
-          listCard.hidden = false;
+        client
+          .from('portal_access')
+          .select('can_upload')
+          .eq('entity_id', ENTITY_ID)
+          .maybeSingle()
+          .then(function (accessResult) {
+            if (accessResult.error || !accessResult.data) {
+              accessNote.hidden = false;
+              return;
+            }
 
-          if (canUpload) {
-            uploadCard.hidden = false;
-            loadRelatedOptions();
-            wireUploadForm(session);
-          }
+            var canUpload = !!accessResult.data.can_upload;
+            listCard.hidden = false;
 
-          loadReceipts(canUpload);
-        });
+            if (canUpload) {
+              uploadCard.hidden = false;
+              loadRelatedOptions();
+              wireUploadForm(session);
+            }
+
+            loadReceipts(canUpload);
+          });
+      });
     });
 
     function loadRelatedOptions() {

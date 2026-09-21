@@ -203,24 +203,14 @@
     // 2FA is compulsory across the site (see supabase-schema.sql) - same
     // check as dashboard.html/property.html/person.html, so this page can't
     // be reached by URL alone without it either.
-    function ensureAal2() {
-      return Promise.all([
-        client.auth.mfa.getAuthenticatorAssuranceLevel(),
-        client.auth.mfa.listFactors()
-      ]).then(function (results) {
-        var levelsResult = results[0];
-        if (levelsResult.error || !levelsResult.data || levelsResult.data.currentLevel !== 'aal2') {
-          window.location.href = 'index.html';
-          return false;
-        }
-        return true;
-      });
+    function guardSession(session) {
+      return window.HouseagoSession.guardSession(client, session);
     }
 
     client.auth.getSession().then(function (result) {
       var session = result.data.session;
       if (!session) { window.location.href = 'index.html'; return; }
-      ensureAal2().then(function (ok) {
+      guardSession(session).then(function (ok) {
         if (!ok) return;
 
         var userEmail = document.getElementById('portal-user-email');

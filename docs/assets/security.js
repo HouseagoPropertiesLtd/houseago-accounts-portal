@@ -75,6 +75,19 @@
     client.auth.getSession().then(function (result) {
       var session = result.data.session;
       if (!session) { window.location.href = 'index.html'; return; }
+
+      // The 24-hour limit applies here as it does everywhere else (see
+      // assets/session-policy.js). The 2FA redirect deliberately does not:
+      // a password-only session is exactly who needs to reach this page, to
+      // set an authenticator app up in the first place.
+      if (window.HouseagoSession.sessionTooOld(session)) {
+        client.auth.signOut().catch(function () { /* going anyway */ }).then(function () {
+          window.HouseagoSession.forgetMfaTime();
+          window.location.href = 'index.html?expired=1';
+        });
+        return;
+      }
+
       loadStatus(session);
     });
 

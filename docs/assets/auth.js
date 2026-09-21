@@ -223,6 +223,15 @@
     // bounce back here if it isn't satisfied yet).
     if (loginForm) {
       var errorBox = document.getElementById('portal-error');
+
+      // Arriving here from a session that hit the 24-hour limit (see
+      // assets/session-policy.js). Saying so is the difference between "the
+      // site keeps logging me out" and "right, it's been a day."
+      if (errorBox && /[?&]expired=1(&|$)/.test(window.location.search)) {
+        errorBox.textContent = 'For security, you are signed out once a day. Please log in again, including a code from your authenticator app.';
+        errorBox.hidden = false;
+      }
+
       var mfaForm = document.getElementById('portal-mfa-form');
       var mfaErrorBox = document.getElementById('portal-mfa-error');
       var mfaCancelLink = document.getElementById('portal-mfa-cancel');
@@ -336,6 +345,7 @@
                 status.textContent = 'That code wasn’t recognised. Check the time on your phone is correct, and try the next code your app shows.';
                 return;
               }
+              window.HouseagoSession.markMfaCompleted();
               window.location.href = 'asset-overview.html';
             });
           });
@@ -457,6 +467,7 @@
                   mfaForm.querySelector('#portal-mfa-code').focus();
                   return;
                 }
+                window.HouseagoSession.markMfaCompleted();
                 window.location.href = 'asset-overview.html';
               });
             });
@@ -559,8 +570,8 @@
           return;
         }
 
-        ensureAal2(session).then(function (ok) {
-          if (!ok) return; // ensureAal2 already sent them back to index.html
+        guardSession(session).then(function (ok) {
+          if (!ok) return; // guardSession already sent them back to index.html
 
           var userEmail = document.getElementById('portal-user-email');
           if (userEmail) userEmail.textContent = session.user.email;
@@ -586,18 +597,8 @@
     // reaching dashboard.html directly with an old, insufficiently
     // authenticated session can't skip enrollment. Same check, same
     // reasoning, in property.js and person.js.
-    function ensureAal2(session) {
-      return Promise.all([
-        client.auth.mfa.getAuthenticatorAssuranceLevel(),
-        client.auth.mfa.listFactors()
-      ]).then(function (results) {
-        var levelsResult = results[0];
-        if (levelsResult.error || !levelsResult.data || levelsResult.data.currentLevel !== 'aal2') {
-          window.location.href = 'index.html';
-          return false;
-        }
-        return true;
-      });
+    function guardSession(session) {
+      return window.HouseagoSession.guardSession(client, session);
     }
 
     document.querySelectorAll('[data-portal-logout]').forEach(function (link) {
