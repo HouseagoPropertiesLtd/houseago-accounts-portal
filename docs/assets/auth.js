@@ -1086,7 +1086,7 @@
         function doUpload(hash) {
           // Every document ends up stored as a PDF, whatever was picked -
           // an image gets wrapped into one, a PDF is left as-is.
-          window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
+          capture.buildUpload().then(function (finalUpload) {
             var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
             var path = entityId + '/' + Date.now() + '-' + safeFileName;
 
@@ -1124,7 +1124,7 @@
           });
         }
 
-        window.HouseagoDocScan.hashFile(file).then(function (hash) {
+        capture.hashDocument().then(function (hash) {
           window.HouseagoDocScan.findDuplicateByHash(client, entityId, hash).then(function (existing) {
             if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Upload it again anyway?')) {
               submitBtn.disabled = false;

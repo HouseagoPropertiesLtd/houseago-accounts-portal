@@ -641,18 +641,48 @@
   // catches a byte-for-byte match: a rescan, a re-export, or a photo taken
   // a second time of the same receipt will have a different hash and
   // won't be caught, same as any other checksum-based check.
+  function digestToHex(digest) {
+    var bytes = new Uint8Array(digest);
+    var hex = '';
+    for (var i = 0; i < bytes.length; i++) {
+      var h = bytes[i].toString(16);
+      hex += h.length < 2 ? '0' + h : h;
+    }
+    return hex;
+  }
+
+  function sha256Hex(buf) {
+    if (!window.crypto || !window.crypto.subtle) return Promise.resolve(null);
+    return window.crypto.subtle.digest('SHA-256', buf).then(digestToHex).catch(function () { return null; });
+  }
+
   function hashFile(file) {
     if (!file || !window.crypto || !window.crypto.subtle) return Promise.resolve(null);
-    return file.arrayBuffer().then(function (buf) {
-      return window.crypto.subtle.digest('SHA-256', buf);
-    }).then(function (digest) {
-      var bytes = new Uint8Array(digest);
-      var hex = '';
-      for (var i = 0; i < bytes.length; i++) {
-        var h = bytes[i].toString(16);
-        hex += h.length < 2 ? '0' + h : h;
-      }
-      return hex;
+    return file.arrayBuffer().then(sha256Hex).catch(function () { return null; });
+  }
+
+  // The fingerprint used to spot a document that has already been uploaded.
+  //
+  // This deliberately hashes the ORIGINAL file or photos, never the PDF
+  // they get turned into. jsPDF stamps a creation date into every document
+  // it builds, so the same photo converted twice produces two different
+  // PDFs - hashing those would quietly stop duplicate detection ever
+  // matching anything again. Hashing the source also keeps every hash
+  // already stored against existing documents meaningful.
+  //
+  // A single file hashes exactly as it always has, so nothing uploaded
+  // before multi-page existed stops matching. Several pages are combined by
+  // hashing their individual hashes in order, so the same pages in the same
+  // order count as a duplicate, while a three-page document is never
+  // mistaken for a one-page one that happens to share its first page.
+  function hashFiles(files) {
+    var list = (files || []).filter(Boolean);
+    if (!list.length) return Promise.resolve(null);
+    if (list.length === 1) return hashFile(list[0]);
+
+    return Promise.all(list.map(hashFile)).then(function (hashes) {
+      if (hashes.some(function (h) { return !h; })) return null;
+      return sha256Hex(new TextEncoder().encode(hashes.join(':')));
     }).catch(function () { return null; });
   }
 
@@ -782,6 +812,15 @@
   // at once (a camera photo is always one file at a time, so that button
   // is unaffected) - see wireCaptureField's onMultipleFiles for what
   // happens when more than one file actually gets picked.
+  //
+  // Note the two different senses of "several files", which are
+  // deliberately separate things:
+  //   - picking several files at once  -> several SEPARATE documents
+  //     (bulk upload, see onMultipleFiles)
+  //   - "Add another page"             -> several pages of ONE document,
+  //     combined into a single multi-page PDF on submit
+  // The second only appears once a first page exists, which is what keeps
+  // the two from being confused with each other.
   function captureFieldHtml(opts) {
     opts = opts || {};
     var label = opts.label || 'Document';
@@ -794,9 +833,11 @@
         '<div class="capture-row">' +
           '<button type="button" class="btn btn-outline" data-scan-capture-btn>Take a photo</button>' +
           '<button type="button" class="btn btn-outline" data-scan-choose-btn>' + chooseLabel + '</button>' +
+          '<button type="button" class="btn btn-outline" data-scan-add-page-btn hidden>Add another page</button>' +
           '<button type="button" class="btn-text" data-scan-clear-btn hidden>Clear</button>' +
         '</div>' +
         '<input type="file" data-scan-camera accept="image/*" capture="environment" hidden>' +
+        '<input type="file" data-scan-add-page accept="image/*" capture="environment" hidden>' +
         '<input type="file" data-scan-picker accept="' + accept + '"' + (opts.multiple ? ' multiple' : '') + ' hidden>' +
         '<p class="form-status" role="status" data-scan-status>' + statusText + '</p>' +
       '</div>'
@@ -851,12 +892,17 @@
   function wireCaptureField(form, opts) {
     opts = opts || {};
     var cameraInput = form.querySelector('[data-scan-camera]');
+    var addPageInput = form.querySelector('[data-scan-add-page]');
     var pickerInput = form.querySelector('[data-scan-picker]');
     var captureBtn = form.querySelector('[data-scan-capture-btn]');
     var chooseBtn = form.querySelector('[data-scan-choose-btn]');
+    var addPageBtn = form.querySelector('[data-scan-add-page-btn]');
     var clearBtn = form.querySelector('[data-scan-clear-btn]');
     var status = form.querySelector('[data-scan-status]');
-    var currentFile = null;
+    // Every page of the document being built, in order. Page one is also
+    // the file that gets scanned for dates/amounts and the one the old
+    // single-file callers see through getFile().
+    var pages = [];
     var autofilled = [];
     // Bumped every time a file is picked or cleared, so a slow scan for a
     // file that's since been replaced (or cleared) never lands its result
@@ -867,6 +913,28 @@
 
     if (captureBtn && cameraInput) captureBtn.addEventListener('click', function () { cameraInput.click(); });
     if (chooseBtn && pickerInput) chooseBtn.addEventListener('click', function () { pickerInput.click(); });
+    if (addPageBtn && addPageInput) addPageBtn.addEventListener('click', function () { addPageInput.click(); });
+
+    function isImage(file) {
+      return !!file && /^image\//.test(file.type || '');
+    }
+
+    // "Add another page" is only offered where it can actually work: more
+    // pages have to be combined into one PDF on submit, and that's only
+    // possible when every page is an image. A document that arrived as a
+    // PDF already can't have photos appended to it client-side, so the
+    // button stays hidden rather than appearing and then failing.
+    function refreshAddPageButton() {
+      if (!addPageBtn) return;
+      var canAdd = pages.length > 0 &&
+        pages.length < window.HouseagoPdfConvert.MAX_PAGES &&
+        pages.every(isImage);
+      addPageBtn.hidden = !canAdd;
+    }
+
+    function pageCountSuffix() {
+      return pages.length > 1 ? ' - ' + pages.length + ' pages' : '';
+    }
 
     function tryFill(el, value, message, bits, overridable) {
       if (!el || value == null || value === '') return;
@@ -878,15 +946,16 @@
 
     function handle(file) {
       if (!file) return;
-      currentFile = file;
+      pages = [file];
       autofilled = [];
       gen++;
       var myGen = gen;
       if (status) status.textContent = file.name + ' - reading…';
       if (clearBtn) clearBtn.hidden = false;
+      refreshAddPageButton();
       scanFileForFields(file).then(function (fields) {
         if (myGen !== gen) return; // a different file has been picked (or Clear was pressed) since this scan started
-        var bits = [file.name];
+        var bits = [file.name + pageCountSuffix()];
         tryFill(opts.dateInput, fields.date, 'date auto-filled, check it’s right', bits);
         tryFill(opts.amountInput, fields.amount, 'amount auto-filled, check it’s right', bits);
         tryFill(opts.nameInput, fields.title, 'title guessed, check it’s right', bits);
@@ -917,7 +986,36 @@
       });
     }
 
+    // Adding a page never re-runs the scan: the date, amount and title are
+    // read off page one, which is where they are on every real document,
+    // and a later page overwriting them with something it happened to
+    // contain would be worse than leaving them alone.
+    function addPage(file) {
+      if (!file) return;
+      if (!pages.length) { handle(file); return; }
+      if (!isImage(file) || !pages.every(isImage)) {
+        if (status) status.textContent = 'Extra pages have to be photos - ' + file.name + ' was not added.';
+        return;
+      }
+      if (pages.length >= window.HouseagoPdfConvert.MAX_PAGES) {
+        if (status) status.textContent = 'That is the maximum of ' + window.HouseagoPdfConvert.MAX_PAGES + ' pages.';
+        return;
+      }
+      pages.push(file);
+      refreshAddPageButton();
+      if (status) {
+        status.textContent = pages[0].name + ' - ' + pages.length +
+          ' pages, uploaded as one document. Add another, or submit when done.';
+      }
+    }
+
     if (cameraInput) cameraInput.addEventListener('change', function () { handle(cameraInput.files[0]); });
+    if (addPageInput) {
+      addPageInput.addEventListener('change', function () {
+        addPage(addPageInput.files[0]);
+        addPageInput.value = ''; // so photographing the same page twice still fires a change
+      });
+    }
     if (pickerInput) {
       pickerInput.addEventListener('change', function () {
         var files = pickerInput.files;
@@ -931,10 +1029,12 @@
     }
 
     function doReset() {
-      currentFile = null;
+      pages = [];
       gen++;
       if (cameraInput) cameraInput.value = '';
+      if (addPageInput) addPageInput.value = '';
       if (pickerInput) pickerInput.value = '';
+      if (addPageBtn) addPageBtn.hidden = true;
       if (status) status.textContent = 'No file chosen yet.';
       if (clearBtn) clearBtn.hidden = true;
       autofilled.forEach(function (a) { if (String(a.el.value) === a.value) a.el.value = ''; });
@@ -944,7 +1044,23 @@
     if (clearBtn) clearBtn.addEventListener('click', doReset);
 
     return {
-      getFile: function () { return currentFile; },
+      // Page one. Callers use this to check something was actually chosen,
+      // and it keeps the original single-file contract working unchanged.
+      getFile: function () { return pages[0] || null; },
+      getPages: function () { return pages.slice(); },
+      // The duplicate-check fingerprint for the whole captured document -
+      // one file, or all its pages together. See hashFiles.
+      hashDocument: function () { return hashFiles(pages); },
+      // The whole captured document as one upload-ready { blob, name, type }
+      // - a single file converted exactly as before, or several photographed
+      // pages combined into one multi-page PDF. Resolves null when nothing
+      // has been chosen.
+      buildUpload: function () {
+        if (!pages.length) return Promise.resolve(null);
+        return window.HouseagoPdfConvert.toPdfFromPages(pages.map(function (f) {
+          return { blob: f, name: f.name, type: f.type };
+        }));
+      },
       reset: doReset
     };
   }
@@ -963,6 +1079,7 @@
     guessDocType: guessDocType,
     guessEntryType: guessEntryType,
     hashFile: hashFile,
+    hashFiles: hashFiles,
     findDuplicateByHash: findDuplicateByHash,
     bulkUploadFiles: bulkUploadFiles,
     summarizeBulkResults: summarizeBulkResults

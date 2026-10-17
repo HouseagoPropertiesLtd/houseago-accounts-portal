@@ -489,7 +489,7 @@
         status.textContent = '';
 
         function doUpload(hash) {
-          window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
+          capture.buildUpload().then(function (finalUpload) {
             var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
             var path = entityId + '/' + Date.now() + '-' + safeFileName;
             client.storage.from('owner-documents').upload(path, finalUpload.blob, { contentType: finalUpload.type || undefined }).then(function (uploadResult) {
@@ -503,7 +503,7 @@
           });
         }
 
-        window.HouseagoDocScan.hashFile(file).then(function (hash) {
+        capture.hashDocument().then(function (hash) {
           window.HouseagoDocScan.findDuplicateByHash(client, entityId, hash).then(function (existing) {
             if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Add it again anyway?')) {
               if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add entry'; }
@@ -928,7 +928,7 @@
         status.textContent = '';
 
         function doUpload(hash) {
-          window.HouseagoPdfConvert.toPdfIfImage({ blob: file, name: file.name, type: file.type }).then(function (finalUpload) {
+          capture.buildUpload().then(function (finalUpload) {
             var safeFileName = finalUpload.name.replace(/[^a-zA-Z0-9._-]/g, '-');
             var path = entityId + '/' + Date.now() + '-' + safeFileName;
 
@@ -966,7 +966,7 @@
           });
         }
 
-        window.HouseagoDocScan.hashFile(file).then(function (hash) {
+        capture.hashDocument().then(function (hash) {
           window.HouseagoDocScan.findDuplicateByHash(client, entityId, hash).then(function (existing) {
             if (existing && !window.confirm('This exact file looks like it’s already been uploaded (as “' + (existing.name || 'a document') + '”). Upload it again anyway?')) {
               submitBtn.disabled = false;
