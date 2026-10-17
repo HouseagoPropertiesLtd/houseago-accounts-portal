@@ -866,3 +866,135 @@ requires a signed-in portal session, not just the public key. Everything
 else audited in this pass - the core RLS/Storage/auth boundaries, the
 repo's public-file exposure, XSS, and supply-chain pinning - was
 re-verified live rather than assumed, and all of it still holds.
+
+## 13. Session lifetime: a phantom-logout bug, and a 24-hour limit (21 Sep 2026)
+
+Prompted by a plain usability complaint rather than a security review: the
+portal kept appearing to log Oscar out on his iPhone, several times a day,
+with no pattern to it. That turned out to be a real bug, and fixing it
+raised a second question - how long a session *should* last - which until
+now had no answer at all.
+
+Shipped as commit `9a2606d`. Written up on 17 Oct 2026 from the work and
+test output of the day itself.
+
+### 13.1 Found and fixed: a network blip was indistinguishable from being logged out
+
+Every signed-in page checked the session's 2FA assurance level on load, and
+redirected to the login page whenever that check came back with an **error**
+- not only when it came back with a definite "this session hasn't completed
+2FA". Those are very different outcomes and were being treated identically:
+
+```js
+if (levelsResult.error || !levelsResult.data || levelsResult.data.currentLevel !== 'aal2') {
+  window.location.href = 'index.html';
+```
+
+The access token expires hourly, so most visits need a network round-trip to
+renew it. On a phone with patchy signal, any one of those failing produced an
+errored check and an immediate bounce to the login screen - looking exactly
+like being signed out, while the session was perfectly valid. The apparent
+randomness tracked signal strength, not session state.
+
+The same check also issued a second call (`listFactors()`) whose result was
+never read, giving the whole thing an extra, entirely pointless way to fail.
+
+**Fixed**: an inconclusive check now lets the page carry on; only a definite
+"not done yet" redirects. Reading the session also retries once before giving
+up, since a token refresh that didn't land is indistinguishable from being
+signed out. The unused `listFactors()` call is gone.
+
+**Why failing open here is safe, and is not a loosening that matters**: these
+page checks were never the security boundary. Every table and the storage
+bucket independently require a completed 2FA challenge at the database level
+(`mfa_ok()`, see section 9), so a session that genuinely hasn't done one gets
+nothing back whatever the page decides. The redirect exists to send people
+somewhere useful, not to keep anyone out - and being client-side, it never
+stopped a capable attacker anyway, who could always have skipped it with
+developer tools. It was costing a real user several interruptions a day and
+buying nothing against a real adversary.
+
+### 13.2 Added: sessions now expire after 24 hours
+
+Before this, sessions never expired. Supabase's own session controls
+(Authentication → Sessions) were both set to `0` - "never" - so a signed-in
+session on a device lasted indefinitely. A lost or borrowed unlocked phone
+meant access with no end date.
+
+Supabase can enforce a maximum session age itself ("Time-box user sessions"),
+but it is **gated behind the Pro plan** and this project is on the free tier -
+the fields are visible but disabled. So the rule is enforced in the page
+instead: 24 hours after the 2FA challenge, the session is ended and a fresh
+authenticator code is required.
+
+The login page now says why it is asking again ("For security, you are signed
+out once a day..."), rather than appearing to have forgotten the user - which
+was the whole complaint this round started from.
+
+### 13.3 Verified: the clock is token-backed, and survives token refresh
+
+The 24-hour clock reads from the `amr` claim (authentication methods
+reference) inside the access token Supabase signs, falling back to browser
+storage only if that claim is absent. Which path is actually used matters a
+great deal: the token is signed and cannot be edited from the browser, while
+local storage can be cleared or altered by anyone with the device.
+
+This was confirmed empirically rather than assumed, using a disposable
+account (created, used, deleted the same session): enrolled a TOTP factor,
+generated a genuine authenticator code, and completed a real challenge. The
+resulting token contains:
+
+```
+aal: "aal2"
+amr: [ { method: "password", timestamp: 1789974169 },
+       { method: "totp",     timestamp: 1789974169 } ]
+```
+
+**The check that mattered most**: the access token is renewed roughly hourly.
+Had renewal reset that timestamp, the 24-hour limit would have restarted every
+hour and never once fired - the feature would have looked correct and done
+nothing. Tested directly by refreshing an aal2 session: `iat` changed as
+expected, while the `totp` timestamp stayed identical. The limit measures from
+the actual 2FA moment, which is the intended behaviour.
+
+Finally, a real token from this project was taken, its 2FA timestamp aged by
+25 hours, and the deployed code confirmed to expire it.
+
+Incidental finding, worth recording: Supabase refuses to enrol a second
+authenticator on an account that already has a verified one without a fresh
+code first (`insufficient_aal`). So someone holding only the password cannot
+quietly add their own authenticator app.
+
+### 13.4 Accepted limitation
+
+The 24-hour rule is enforced by the page, not by Supabase's servers. It ends
+ordinary use of a stale session - someone picking up an unlocked phone - and
+it cannot be extended by clearing browser data, because the deadline travels
+inside the signed token. It would **not** stop someone capable of extracting
+the stored token and calling the database directly, which Supabase would
+still honour until that token's own expiry. Closing that completely requires
+the Pro plan. Same class of limitation as the MFA-unenroll mitigation in
+section 1.5, and accepted on the same basis.
+
+### 13.5 Also done: four copies of this logic became one
+
+The faulty check existed as four copy-pasted copies across `auth.js`,
+`property.js`, `person.js` and `asset-overview.js` - which is precisely how
+one subtly wrong version came to live in four files at once. All four now
+delegate to a single new `assets/session-policy.js`, loaded by every page.
+`receipts.js` and `security.js` use it too (the latter applies the 24-hour
+rule but deliberately not the 2FA redirect, since a password-only session is
+exactly who needs to reach that page to set an authenticator up).
+
+### 13.6 Testing
+
+14 unit tests over the age arithmetic, the token decoding, every malformed-
+input path, and the storage-blocked (private browsing) case - all passing.
+Then verified against the live deployed site: a simulated network failure and
+an error response both correctly carry on rather than redirecting, a genuine
+aal2 session carries on, and the expiry notice renders. No console errors.
+`sw.js` bumped to v44.
+
+**Not yet recorded**: whether the change has actually settled the problem in
+day-to-day use over the following weeks. That is Oscar's to judge, and worth
+adding here once known.
