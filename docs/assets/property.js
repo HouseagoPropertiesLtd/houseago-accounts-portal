@@ -59,18 +59,26 @@
 
   // Same fixed set of certificates/assessments as SETUP.md documents, kept
   // in sync by hand with the copy in assets/auth.js (which only needs the
-  // labels, for the dashboard-wide "expiring soon" banner). The first four
+  // labels, for the dashboard-wide "expiring soon" banner). The first five
   // have a genuine renewal date and get the full green/amber/red tracking
   // below; the last three (deposit certificate, prescribed information,
   // inventory) are one-off paperwork issued at the start of a tenancy with
   // no fixed renewal - tagging them here just gives them their own place
   // in the Type dropdown and the status panel below shows them as "On
   // file" or "Not on file yet" rather than a real expiry countdown.
+  //
+  // "Insurance Policy" is a compliance_type tracked inside Compliance &
+  // Tenancy, which is a different thing from a property's separate
+  // "-insurance" document section (see docTypeLabel below) - the section is
+  // just a filing place, while this gives the policy a renewal date and the
+  // same expiry tracking the certificates get. A policy filed in the
+  // Insurance section instead is still listed, it simply isn't tracked.
   var COMPLIANCE_TYPES = [
     { id: 'gas_safety', label: 'Gas Safety Certificate (CP12)', hint: 'renews annually' },
     { id: 'eicr', label: 'Electrical Installation Condition Report (EICR)', hint: 'renews at least every 5 years' },
     { id: 'epc', label: 'Energy Performance Certificate (EPC)', hint: 'valid for 10 years' },
     { id: 'legionella', label: 'Legionella Risk Assessment', hint: 'review at least every 2 years' },
+    { id: 'insurance', label: 'Insurance Policy', hint: 'renews annually' },
     { id: 'deposit_certificate', label: 'Deposit Protection Certificate', hint: 'issued once per tenancy, no fixed renewal' },
     { id: 'deposit_prescribed_info', label: 'Deposit - Prescribed Information', hint: 'issued once per tenancy, no fixed renewal' },
     { id: 'inventory', label: 'Inventory / Schedule of Condition', hint: 'done at the start (and end) of each tenancy, no fixed renewal' }
@@ -105,10 +113,22 @@
       case 'undated': text = 'On file, no expiry date given'; cls = 'neutral'; break;
       default: text = 'Not on file yet'; cls = 'missing';
     }
+
+    // When the certificate behind a status actually is on file, offer it
+    // right here. Seeing "expires in 9 days" and then having to go hunting
+    // down the document list for the certificate itself is the obvious next
+    // thing someone wants, whether they're renewing it or sending it on.
+    var download = (result.doc && result.doc.file_path)
+      ? '<a href="#" class="compliance-download" data-compliance-download="' + escapeAttr(result.doc.file_path) + '">Download</a>'
+      : '';
+
     return (
       '<div class="compliance-row">' +
         '<div><div class="compliance-name">' + escapeHtml(type.label) + '</div><div class="compliance-hint">' + escapeHtml(type.hint) + '</div></div>' +
-        '<span class="status-pill status-' + cls + '">' + escapeHtml(text) + '</span>' +
+        '<div class="compliance-actions">' +
+          '<span class="status-pill status-' + cls + '">' + escapeHtml(text) + '</span>' +
+          download +
+        '</div>' +
       '</div>'
     );
   }
@@ -757,6 +777,21 @@
       panel.innerHTML = COMPLIANCE_TYPES.map(function (type) {
         return complianceStatusHtml(type, complianceStatusFor(byType[type.id]));
       }).join('');
+
+      // Same short-lived signed link the document list uses - the file is
+      // never public, the URL is good for five minutes and only works for
+      // someone the database already allows to see that document.
+      panel.querySelectorAll('[data-compliance-download]').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+          e.preventDefault();
+          var path = link.getAttribute('data-compliance-download');
+          if (!path) return;
+          client.storage.from('owner-documents').createSignedUrl(path, 300).then(function (signedResult) {
+            if (signedResult.error || !signedResult.data) { alert('This file could not be opened. Please try again.'); return; }
+            window.open(signedResult.data.signedUrl, '_blank', 'noopener');
+          });
+        });
+      });
     }
 
     function renderDocRow(doc, accessById, session, showType, reloadPropertyId) {

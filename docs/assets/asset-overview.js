@@ -97,9 +97,9 @@
 
   // Same fixed set as property.js's own COMPLIANCE_TYPES (kept in sync by
   // hand, same as elsewhere on the site) - split into two groups for this
-  // summary: the four with a genuine renewal date ("Compliance"), and the
+  // summary: the five with a genuine renewal date ("Compliance"), and the
   // three one-off tenancy documents with no fixed renewal ("Tenancy").
-  var COMPLIANCE_GROUP_TYPES = ['gas_safety', 'eicr', 'epc', 'legionella'];
+  var COMPLIANCE_GROUP_TYPES = ['gas_safety', 'eicr', 'epc', 'legionella', 'insurance'];
   var TENANCY_GROUP_TYPES = ['deposit_certificate', 'deposit_prescribed_info', 'inventory'];
   var EXPIRING_SOON_DAYS = 60;
 

@@ -113,6 +113,7 @@
     { id: 'eicr', label: 'Electrical Installation Condition Report (EICR)' },
     { id: 'epc', label: 'Energy Performance Certificate (EPC)' },
     { id: 'legionella', label: 'Legionella Risk Assessment' },
+    { id: 'insurance', label: 'Insurance Policy' },
     { id: 'deposit_certificate', label: 'Deposit Protection Certificate' },
     { id: 'deposit_prescribed_info', label: 'Deposit - Prescribed Information' },
     { id: 'inventory', label: 'Inventory / Schedule of Condition' }

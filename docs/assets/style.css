@@ -498,6 +498,22 @@ form.form-card select {
 }
 .compliance-name { font-weight: 700; font-size: 0.9rem; color: var(--ink); }
 .compliance-hint { font-size: 0.78rem; color: var(--ink-soft); margin-top: 2px; }
+/* Status pill plus, when the certificate is actually on file, a link to it.
+   Wrapping on a narrow screen keeps the link from squeezing the pill. */
+.compliance-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.compliance-download {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--rose-deep);
+  text-decoration: underline;
+  white-space: nowrap;
+}
 .section-subhead { font-size: 0.8rem; font-weight: 700; color: var(--rose-deep); margin: 4px 0 10px; }
 
 /* ---------- Expiring-soon banner (dashboard) ------------------------------ */

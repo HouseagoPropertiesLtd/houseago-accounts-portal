@@ -203,8 +203,9 @@ create table if not exists public.entity_documents (
   -- compliance_type is set only on documents uploaded into a "...
   -- -compliance-tenancy" section, and only when the document IS one of the
   -- fixed certificate/assessment types the Compliance status panel tracks
-  -- (see COMPLIANCE_TYPES in auth.js) — 'gas_safety', 'eicr', 'epc', or
-  -- 'legionella'. Left null for anything else filed in that section, e.g. a
+  -- (see COMPLIANCE_TYPES in auth.js) — 'gas_safety', 'eicr', 'epc',
+  -- 'legionella' or 'insurance'. Left null for anything else filed in that
+  -- section, e.g. a
   -- tenancy agreement, which just appears in the ordinary document list.
   compliance_type text,
   -- file_hash is a SHA-256 of the uploaded file's own bytes, used only to
