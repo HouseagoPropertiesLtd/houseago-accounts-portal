@@ -841,3 +841,10 @@ body.theme-dark .portal-card input {
 body.theme-dark .portal-card input::placeholder { color: rgba(245, 241, 234, 0.4); }
 body.theme-dark .portal-note { background: rgba(216, 182, 168, 0.14); }
 body.theme-dark .portal-note code { background: rgba(255, 255, 255, 0.12); }
+
+/* Invoice Inbox link in the top bar, with its outstanding-count badge */
+.inbox-link { display: inline-flex; align-items: center; gap: 8px; }
+.inbox-badge {
+  display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 999px;
+  background: #c0392b; color: #fff; font-size: 0.72rem; font-weight: 700; line-height: 1.5; text-align: center;
+}
